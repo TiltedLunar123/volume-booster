@@ -124,6 +124,17 @@ if (manifests.chrome && manifests.firefox) {
   if (!manifests.firefox.browser_specific_settings?.gecko?.id) {
     fail('the Firefox manifest needs browser_specific_settings.gecko.id');
   }
+
+  // AMO rejects the upload outright without this, and the value has to keep
+  // matching the no-data-collection claim made in the listing and PRIVACY.md.
+  const collection = manifests.firefox.browser_specific_settings?.gecko?.data_collection_permissions;
+  if (!collection) {
+    fail('the Firefox manifest needs browser_specific_settings.gecko.data_collection_permissions, or AMO refuses the upload');
+  } else if (JSON.stringify(collection.required) !== JSON.stringify(['none'])) {
+    fail('data_collection_permissions.required must be exactly ["none"] while the listing claims no data is collected');
+  } else {
+    ok('Firefox data collection is declared as none');
+  }
 }
 
 // No network calls anywhere in the shipped code. This is a promise made in the

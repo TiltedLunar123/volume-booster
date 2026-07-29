@@ -30,6 +30,11 @@ shipped code, so this is enforced rather than promised.
 The extension deliberately does **not** request the `tabs` permission, broad
 `host_permissions`, or `tabCapture`.
 
+The Firefox build declares this in the manifest itself, as
+`browser_specific_settings.gecko.data_collection_permissions.required` set to
+`["none"]`, which is what Firefox shows users on the install prompt. The build
+fails if that value ever stops saying `none` while this page claims otherwise.
+
 ## Deleting your data
 
 **Reset all** in the popup erases every stored site level. Removing the
