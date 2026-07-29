@@ -212,3 +212,53 @@ Hook is MAKE IT / LOUDER, white over amber, with the real popup at 480% on the
 right so the readout and the warmed slider carry the colour. Checked at 210px
 wide, the size the browse feed actually renders: the hook and the percentage
 both still read, and everything else drops to texture, which is the intent.
+
+---
+
+# AMO (addons.mozilla.org) submission
+
+Fields differ enough from the Chrome console to be worth recording separately.
+The description, privacy policy and reviewer notes are pasted as text on AMO,
+not linked.
+
+| Field | Value |
+| --- | --- |
+| Name | Volume Booster |
+| Slug | edit it. AMO offered `volume-booster1`, which reads as a duplicate |
+| Summary | prefilled from the manifest, 111 chars against a 250 limit |
+| Experimental | no |
+| Requires payment or hardware | no |
+| Categories | Photos, Music & Videos, and nothing else |
+| Support email | blank, it would be published |
+| Support website | https://github.com/TiltedLunar123/volume-booster/issues |
+| License | MIT |
+| Has a privacy policy | yes, paste the text |
+
+Only one category genuinely fits. Tabs means tab management and Privacy &
+Security describes how it behaves rather than what it does, so filling all three
+slots would be category padding.
+
+The description is the Chrome copy with the Firefox differences applied:
+`about:` pages instead of `chrome://`, and Firefox named as the thing enforcing
+the CORS rule. AMO wants the most important points inside the first 250
+characters, which the opening paragraph covers.
+
+The privacy policy text is PRIVACY.md flattened to plain text.
+
+## Reviewer notes
+
+The paragraph that matters is the one about source code. AMO flags submissions
+that look built, and this one is not: the package is byte-identical to `src/`
+with the manifest renamed, `tools/build.mjs` only copies and zips, and nothing
+is minified or transpiled. Saying so up front avoids a round trip asking for
+sources.
+
+Also worth stating for a reviewer: both unboostable cases (DRM and
+cross-origin-without-CORS) are checked before `createMediaElementSource`, not
+after, because that node outputs silence rather than throwing and its routing is
+permanent. A reviewer seeing the guard might otherwise read it as unnecessary.
+
+## Screenshots
+
+The five 1280x800 PNGs already in `store/` upload as they are. AMO has no fixed
+dimensions and accepts alpha, so nothing needs re-exporting.
