@@ -269,7 +269,13 @@
         return;
       }
 
-      // Protected, tainted, or not yet resolved: reduce only.
+      // An element with no resolved source yet makes no sound, so leave its
+      // volume alone rather than writing a value we would have to put back. The
+      // page may adjust its own volume in the meantime, and restoring a stale
+      // reading over the top of that would be worse than doing nothing.
+      if (kind === 'pending') return;
+
+      // Protected, tainted, or refused by another extension: reduce only.
       setFallback(el, Math.min(1, level));
     });
 
