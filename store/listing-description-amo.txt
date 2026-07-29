@@ -1,0 +1,49 @@
+Turn up quiet videos, podcasts and streams past whatever ceiling the site's own volume slider puts on them. One slider in your toolbar, 0% to 600%, and it remembers the level for every site. No tracking, no network calls, open source.
+
+WHAT YOU GET
+
+0% to 600% on a single slider, with a notch at 100% so normal is easy to find again. It turns audio down as well as up.
+
+Your level is remembered per site. Set YouTube to 200% once and it's still 200% next week.
+
+A limiter kicks in above 100%, so loud gets louder instead of turning to crackle.
+
+Presets at 100, 150, 200, 300 and 500 percent.
+
+Mute, plus a reset that clears every site at once.
+
+Keyboard shortcuts. Alt+Shift+Up and Alt+Shift+Down to nudge, Alt+Shift+0 to reset, Alt+Shift+M to mute.
+
+The toolbar badge shows the current level, so you can tell at a glance which tabs are boosted.
+
+Each tab keeps its own level, so two tabs on the same site don't fight each other.
+
+WHERE IT WORKS
+
+Most of the web: YouTube, YouTube Music, Twitch, SoundCloud, Bandcamp, Vimeo, podcast players, news sites, and plain audio and video on any page. Embedded players work too, because every frame is handled on its own.
+
+WHERE IT DOESN'T
+
+Worth knowing before you install, since plenty of listings in this category skip past it.
+
+Streaming services that use DRM won't boost: Netflix, Spotify, Amazon Prime Video, Apple Music, anything in that family. Their audio is encrypted and no extension is allowed near it, though that's a browser rule rather than something anyone can code around.
+
+A few sites stream their audio from a separate domain without the header that permits access to it. Firefox blocks that as well, so on those pages the add-on leaves the sound alone rather than breaking it.
+
+You can still turn the volume down either way, and the popup says what happened instead of quietly doing nothing.
+
+Browser pages are off limits too, about: pages and this site included. Firefox doesn't let extensions run there.
+
+PRIVACY
+
+Nothing here tracks you. There are no ads, no analytics, and no account to sign up for.
+
+The add-on makes no network requests at all. There's no server for it to talk to. It saves one thing: a list of sites and the level you picked for each. That sits on your own device, in the browser's storage. Reset all wipes it. Uninstalling deletes it.
+
+It asks for three permissions: storage to remember your levels, activeTab to know which tab to apply them to, and scripting to attach to a tab that was already open when you installed it.
+
+OPEN SOURCE
+
+The full source is on GitHub under the MIT license, and it's the same plain JavaScript that ships in the package. No bundler, no minifier, so you can read exactly what runs.
+
+https://github.com/TiltedLunar123/volume-booster

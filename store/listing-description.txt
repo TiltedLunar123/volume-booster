@@ -4,14 +4,21 @@ Volume Booster puts one slider in your toolbar. Drag it and the audio in that ta
 
 WHAT YOU GET
 
-- 0% to 600% on a single slider, with a notch at 100% so normal is easy to find again. It turns audio down as well as up.
-- Your level is remembered per site. Set YouTube to 200% once and it's still 200% next week.
-- A limiter kicks in above 100%, so loud gets louder instead of turning to crackle.
-- Presets at 100, 150, 200, 300 and 500 percent.
-- Mute, plus a reset that clears every site at once.
-- Keyboard shortcuts. Alt+Shift+Up and Alt+Shift+Down to nudge, Alt+Shift+0 to reset, Alt+Shift+M to mute.
-- The toolbar badge shows the current level. You can tell at a glance which tabs are boosted (it warms from green to red as you push it).
-- Each tab keeps its own level, so two tabs on the same site don't fight each other.
+0% to 600% on a single slider, with a notch at 100% so normal is easy to find again. It turns audio down as well as up.
+
+Your level is remembered per site. Set YouTube to 200% once and it's still 200% next week.
+
+A limiter kicks in above 100%, so loud gets louder instead of turning to crackle.
+
+Presets at 100, 150, 200, 300 and 500 percent.
+
+Mute, plus a reset that clears every site at once.
+
+Keyboard shortcuts. Alt+Shift+Up and Alt+Shift+Down to nudge, Alt+Shift+0 to reset, Alt+Shift+M to mute.
+
+The toolbar badge shows the current level. You can tell at a glance which tabs are boosted (it warms from green to red as you push it).
+
+Each tab keeps its own level, so two tabs on the same site don't fight each other.
 
 WHERE IT WORKS
 

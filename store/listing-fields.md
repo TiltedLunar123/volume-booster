@@ -2,7 +2,7 @@
 
 Every text field for the Chrome Web Store developer console, kept here so a
 resubmission does not mean rewriting them. The description lives separately in
-`listing-description.txt`.
+`listing-description.txt` (Chrome) and `listing-description-amo.txt` (AMO).
 
 Most of it transfers to AMO as well. AMO additionally needs the data collection
 declaration, which is already in `src/manifest.firefox.json` as
@@ -14,7 +14,7 @@ declaration, which is already in `src/manifest.firefox.json` as
 | --- | --- |
 | Title | from package: `Volume Booster` |
 | Summary | from package, 111 chars, under the 132 limit |
-| Description | `listing-description.txt` |
+| Description | `listing-description.txt` (Chrome) and `listing-description-amo.txt` (AMO) |
 | Category | Tools |
 | Language | English (United States) |
 | Official URL | none, it needs a domain verified in Search Console |
@@ -179,14 +179,14 @@ Public, all regions, free.
     Reload the page and the level you set is restored automatically.
 
     Expected limitations, which the popup reports rather than failing silently:
-    - DRM services (Netflix, Spotify, Prime Video, Apple Music) cannot be
+    DRM services (Netflix, Spotify, Prime Video, Apple Music) cannot be
       boosted. Encrypted Media Extensions audio cannot be routed through the Web
       Audio API by any extension. The popup shows "Protected audio" on these
       sites. Volume can still be lowered.
-    - Sites serving audio cross-origin without an Access-Control-Allow-Origin
+    Sites serving audio cross-origin without an Access-Control-Allow-Origin
       header also cannot be boosted, for the same browser security reason. The
       popup shows "Boost unavailable".
-    - Browser pages (chrome://, the Web Store) show a "Cannot run on this page"
+    Browser pages (chrome://, the Web Store) show a "Cannot run on this page"
       state.
 
     Full source, including the same unminified JavaScript in the package:
