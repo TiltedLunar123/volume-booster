@@ -292,6 +292,15 @@ limiter is doing its job. That is correct behaviour, not a bug.
 `node tools/build.mjs --check` runs `node --check` on every JS file and validates
 both manifests as JSON with the required keys present. That runs in CI.
 
+`node test/unit.mjs` covers the pure logic and the port state machine.
+
+`node test/e2e.mjs` drives a real browser over the DevTools protocol: it loads
+the built extension into a throwaway profile with nothing else in it, boosts a
+page, navigates away and back, and asserts the audio graph survived the
+back/forward cache and the worker console stayed clean. It needs Edge, because
+branded Chrome ignores `--load-extension`, so it is not part of CI. Anything
+below that it covers is worth trusting to it rather than repeating by hand.
+
 Manual matrix, both browsers:
 
 | Scenario | Expect |
