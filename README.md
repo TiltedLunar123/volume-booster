@@ -126,11 +126,17 @@ Full reasoning, including what was wrong in the first draft of the plan, is in
 ## Development
 
 ```bash
-node tools/make-icons.mjs   # regenerate the png icons from code
-node tools/build.mjs --check # syntax, manifests, and the no-network check
-node test/unit.mjs           # 59 tests over classification, mapping, and state
-node tools/build.mjs         # build dist/ and the zips
+node tools/make-icons.mjs     # regenerate the png icons from code
+node tools/build.mjs --check  # syntax, manifests, and the no-network check
+node test/unit.mjs            # 59 tests over classification, mapping, and state
+node tools/build.mjs          # build dist/ and the zips
+node tools/make-store-art.mjs # re-render the store screenshots and promo tiles
 ```
+
+`make-store-art.mjs` drives a headless Chromium over the DevTools protocol and
+screenshots the real popup markup and CSS, so the store images cannot drift away
+from the actual UI. It finds a browser under `ms-playwright` or an installed
+Chrome, or you can point `CHROME_PATH` at one.
 
 There is no `package.json` and no dependencies. Node is used only to draw the
 icons and write the zips; the extension itself is the plain JS in `src/`.

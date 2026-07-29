@@ -1,53 +1,21 @@
 /*
  * Renders the toolbar icons. No image editor, no binary blobs in git.
  *
- * A tiny PNG encoder plus a 4x supersampled software rasteriser. The glyph
- * simplifies itself at small sizes: two arcs at 48px and above, one thicker arc
- * below that, because two hairlines turn to mush at 16px.
+ * A 4x supersampled software rasteriser over the PNG encoder in png.mjs. The
+ * glyph simplifies itself at small sizes: two arcs at 48px and above, one
+ * thicker arc below that, because two hairlines turn to mush at 16px.
  *
  * Run: node tools/make-icons.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
-import { crc32 } from './crc32.mjs';
+import { encodePng } from './png.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(HERE, '..', 'src', 'icons');
 const SIZES = [16, 32, 48, 128];
 const SS = 4;
-
-/* ---------------------------- png encoder ---------------------------- */
-
-function chunk(type, data) {
-  const length = Buffer.alloc(4);
-  length.writeUInt32BE(data.length, 0);
-  const typed = Buffer.concat([Buffer.from(type, 'ascii'), data]);
-  const sum = Buffer.alloc(4);
-  sum.writeUInt32BE(crc32(typed), 0);
-  return Buffer.concat([length, typed, sum]);
-}
-
-function encodePng(width, height, rgba) {
-  const stride = width * 4;
-  const raw = Buffer.alloc((stride + 1) * height);
-  for (let y = 0; y < height; y++) {
-    raw[y * (stride + 1)] = 0; // filter: none
-    rgba.copy(raw, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
-  }
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8;  // bit depth
-  ihdr[9] = 6;  // colour type: RGBA
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', ihdr),
-    chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
-    chunk('IEND', Buffer.alloc(0))
-  ]);
-}
 
 /* ----------------------------- geometry ------------------------------ */
 

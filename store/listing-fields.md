@@ -25,15 +25,30 @@ declaration, which is already in `src/manifest.firefox.json` as
 
 ## Graphic assets
 
-| Asset | Spec | Status |
+| Asset | Spec | File |
 | --- | --- | --- |
 | Store icon | 128x128, a 96x96 tile with 16px transparent padding per side | `store-icon-128.png` |
-| Screenshots | 1280x800 or 640x400, JPEG or 24-bit PNG, no alpha, full bleed, 1 to 5 | needed |
-| Small promo tile | 440x280, no alpha | optional |
-| Marquee promo tile | 1400x560, no alpha | optional |
+| Screenshot 1 | 1280x800, 24-bit RGB, no alpha | `screenshot-1-slider.png` |
+| Screenshot 2 | same, shown in light theme | `screenshot-2-per-site.png` |
+| Screenshot 3 | same | `screenshot-3-controls.png` |
+| Screenshot 4 | same | `screenshot-4-honest.png` |
+| Screenshot 5 | same | `screenshot-5-privacy.png` |
+| Small promo tile | 440x280, no alpha | `promo-small-440x280.png` |
+| Marquee promo tile | 1400x560, no alpha | `promo-marquee-1400x560.png` |
+| Promo video | optional YouTube URL | none, leave blank |
 
-The toolbar icons in `src/icons/` are full bleed and are the wrong shape for the
-listing. `tools/make-icons.mjs` generates both.
+`tools/make-icons.mjs` draws the icons. The toolbar set in `src/icons/` is full
+bleed; the listing icon needs the padded variant, and both come out of that one
+script.
+
+`tools/make-store-art.mjs` renders the screenshots and tiles by driving a
+headless Chromium over the DevTools protocol. The popup inside those images is
+the real `popup.html` markup styled by the real `popup.css`, so a UI change plus
+a re-run keeps the listing honest. Nothing in them is a drawing of the interface.
+
+Screenshots and tiles are written as 24-bit RGB because the store rejects an
+alpha channel. The store icon keeps its alpha, which is allowed and is what
+gives it transparent corners.
 
 ## Privacy
 
