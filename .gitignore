@@ -3,3 +3,6 @@ node_modules/
 *.zip
 .DS_Store
 Thumbs.db
+
+# Regenerable render artifact, rebuild with tools/make-promo-video.mjs
+store/*.mp4

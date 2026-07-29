@@ -35,7 +35,7 @@ declaration, which is already in `src/manifest.firefox.json` as
 | Screenshot 5 | same | `screenshot-5-privacy.png` |
 | Small promo tile | 440x280, no alpha | `promo-small-440x280.png` |
 | Marquee promo tile | 1400x560, no alpha | `promo-marquee-1400x560.png` |
-| Promo video | optional YouTube URL | none, leave blank |
+| Promo video | optional YouTube URL | `volume-booster-promo.mp4`, upload then paste the URL |
 
 `tools/make-icons.mjs` draws the icons. The toolbar set in `src/icons/` is full
 bleed; the listing icon needs the padded variant, and both come out of that one
@@ -49,6 +49,37 @@ a re-run keeps the listing honest. Nothing in them is a drawing of the interface
 Screenshots and tiles are written as 24-bit RGB because the store rejects an
 alpha channel. The store icon keeps its alpha, which is allowed and is what
 gives it transparent corners.
+
+`tools/make-promo-video.mjs` renders the promo video, 1920x1080 at 30fps, about
+44 seconds, with narration from a local Kokoro model. The mp4 is not committed
+because it rebuilds from one command.
+
+## YouTube upload
+
+The store field wants a YouTube URL, so the video goes up there first.
+
+**Title**
+
+    Volume Booster: turn any tab up to 600%
+
+**Description**
+
+    A Chrome and Firefox extension that boosts the volume of any tab with one
+    slider, up to 600%, and remembers the level for each site.
+
+    A limiter above 100% keeps the loud end from turning to crackle. Presets,
+    mute, and keyboard shortcuts are built in.
+
+    DRM services like Netflix and Spotify cannot be boosted by any extension,
+    because their audio is encrypted and browsers keep it out of the Web Audio
+    API. This one tells you when it hits that instead of failing quietly.
+
+    No tracking, no analytics, no account, and no network requests at all.
+    Open source under the MIT license.
+
+    https://github.com/TiltedLunar123/volume-booster
+
+Set it to unlisted or public, whichever you prefer. The store accepts both.
 
 ## Privacy
 

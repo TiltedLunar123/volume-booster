@@ -131,12 +131,20 @@ node tools/build.mjs --check  # syntax, manifests, and the no-network check
 node test/unit.mjs            # 59 tests over classification, mapping, and state
 node tools/build.mjs          # build dist/ and the zips
 node tools/make-store-art.mjs # re-render the store screenshots and promo tiles
+node tools/make-promo-video.mjs # re-render the narrated promo video
 ```
 
 `make-store-art.mjs` drives a headless Chromium over the DevTools protocol and
 screenshots the real popup markup and CSS, so the store images cannot drift away
 from the actual UI. It finds a browser under `ms-playwright` or an installed
 Chrome, or you can point `CHROME_PATH` at one.
+
+`make-promo-video.mjs` renders the 1080p promo video the same way, stepping
+frames deterministically rather than capturing in real time. Narration is Kokoro
+running locally, one sentence per scene, and each scene is sized to its own
+sentence so the picture stays locked to the voice. It needs `ffmpeg` and the
+media-tools Python environment. The mp4 is not committed, since re-rendering it
+is one command.
 
 There is no `package.json` and no dependencies. Node is used only to draw the
 icons and write the zips; the extension itself is the plain JS in `src/`.
