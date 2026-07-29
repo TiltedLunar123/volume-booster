@@ -1,0 +1,9 @@
+One slider in your toolbar, 0% to 600%, with a notch at 100% so normal is easy to find again. It remembers the level you picked for every site.
+
+Above 100% a limiter keeps loud audio from turning to crackle. Presets, mute and keyboard shortcuts are in the popup, along with a reset that clears every site at once.
+
+Going back a page keeps your sound. A page the browser restores from its back/forward cache comes back with the audio working and the level still applied.
+
+DRM audio won't boost. Netflix, Spotify, Prime Video and the rest encrypt it, and Firefox doesn't let any add-on near that. Same story on the few sites that serve audio from a separate domain without the header that permits access. You can still turn the volume down in both cases, and the popup says which one you've hit instead of quietly doing nothing.
+
+No tracking, no network calls, no account to sign up for. Full source on GitHub under the MIT license.

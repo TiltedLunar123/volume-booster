@@ -42,7 +42,9 @@ Nothing here tracks you. There are no ads, no analytics, and no account to sign 
 
 The extension makes no network requests at all. There's no server for it to talk to. It saves one thing: a list of sites and the level you picked for each. That sits on your own device, in the browser's storage. Reset all wipes it. Uninstalling deletes it.
 
-It asks for three permissions: storage to remember your levels, activeTab to know which tab to apply them to, and scripting to attach to a tab that was already open when you installed it. It does not ask for your browsing history or for access to all websites.
+It asks for three permissions: storage to remember your levels, activeTab to know which tab to apply them to, and scripting to attach to a tab that was already open when you installed it. It does not ask for your browsing history.
+
+It does run on every page, because that is where the audio is, and Chrome describes that at install as reading and changing your data on all websites. What it actually does on a page is look for audio and video elements and change how loud they are. It doesn't read page content, and there is nowhere for it to send anything even if it did.
 
 OPEN SOURCE
 

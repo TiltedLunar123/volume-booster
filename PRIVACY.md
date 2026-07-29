@@ -34,9 +34,17 @@ shipped code, so this is enforced rather than promised.
 | `storage` | Saves your level for each site so it comes back when you return. Stays on your device. |
 | `activeTab` | Lets the popup see which page you are on so the level goes to the right tab. Access ends when the popup closes. |
 | `scripting` | Applies the control to a tab that was already open before the extension was installed. |
+| a content script on every site | Reaches the audio, which is on the page rather than in the extension. It looks for audio and video elements and changes how loud they are. |
 
-The extension deliberately does **not** request the `tabs` permission, broad
+The extension deliberately does **not** request the `tabs` permission,
 `host_permissions`, or `tabCapture`.
+
+That last row is the one worth being straight about, because it is what the
+install prompt is describing when it says the extension can read and change
+your data on every website. Running on every page is what makes a volume
+slider work anywhere, and there is no narrower way to ask for it. What the
+script does with that reach is bounded by the rest of this page: it reads no
+page content, and it has no way to send anything anywhere.
 
 The Firefox build declares this in the manifest itself, as
 `browser_specific_settings.gecko.data_collection_permissions.required` set to

@@ -42,6 +42,8 @@ The add-on makes no network requests at all. There's no server for it to talk to
 
 It asks for three permissions: storage to remember your levels, activeTab to know which tab to apply them to, and scripting to attach to a tab that was already open when you installed it.
 
+It does run on every page, because that is where the audio is, and Firefox describes that at install as access to your data for all websites. What it actually does on a page is look for audio and video elements and change how loud they are. It doesn't read page content, and there is nowhere for it to send anything even if it did.
+
 OPEN SOURCE
 
 The full source is on GitHub under the MIT license, and it's the same plain JavaScript that ships in the package. No bundler, no minifier, so you can read exactly what runs.
