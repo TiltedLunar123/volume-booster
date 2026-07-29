@@ -275,8 +275,9 @@ Home/End work. Presets are buttons with `aria-pressed`. Mute is a toggle with
 | 8 | Page's own volume slider | never write `el.volume` on the Web Audio path; effective level is `el.volume * gain` |
 | 9 | Zipper noise when dragging | `setTargetAtTime` with a 20ms constant |
 | 10 | Clipping at high gain | compressor at -3dB, ratio 20, 3ms attack, in-chain only above 1.0 |
-| 11 | AudioContext leak | one context per frame, closed on `pagehide` |
+| 11 | AudioContext leak | one context per frame, closed on `pagehide` only when the page is really leaving (`persisted === false`) |
 | 12 | Service worker eviction | ports reconnect and re-announce, state rebuilds itself |
+| 16 | Back/forward cache | the port is closed on `pagehide` and reopened on a `persisted` `pageshow`; the context is deliberately kept, because a cached page comes back with its graph wired to elements that can never be routed again |
 | 13 | Extension installed while pages are open | `scripting.executeScript` fallback on popup open |
 | 14 | Two tabs on one origin | per-tab level is live and independent, per-origin value is the default for new loads |
 | 15 | Detached elements held forever | sweep prunes elements that are disconnected and paused |

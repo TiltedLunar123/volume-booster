@@ -189,6 +189,12 @@ api.runtime.onConnect.addListener(function (port) {
   st.frames.set(id, { port: port, status: null });
 
   port.onDisconnect.addListener(function () {
+    // The frame closing its own port is the common case, but the browser also
+    // closes ports itself when a page enters the back/forward cache, and it
+    // reports that as an error on this end. Reading lastError is what stops it
+    // being logged as unchecked.
+    if (api.runtime.lastError) { /* expected, the frame is gone either way */ }
+
     var cur = tabs.get(tabId);
     if (!cur) return;
     cur.frames.delete(id);

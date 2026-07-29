@@ -98,6 +98,188 @@ ok(classify({ currentSrc: 'blob:https://example.com/x', mediaKeys: {} }) === 'pr
   'DRM outranks an otherwise routable source');
 
 /* ==================================================================== *
+ * The back/forward cache lifecycle.
+ *
+ * A cached page comes back with this script's state intact and its port
+ * dead, so the two failure modes are a frame that never reconnects and a
+ * frame that reconnects twice. The third is worse and silent: the audio
+ * graph is the only route a routed element has left, and closing the
+ * context on the way into the cache takes it away permanently.
+ *
+ * This boots the real content script in a fake frame rather than testing a
+ * copy of its logic, and drives it with the events the browser sends.
+ * ==================================================================== */
+
+describe('content.js back/forward cache');
+
+function loadContent() {
+  const windowEvents = {};
+  const ports = [];
+  const contexts = [];
+  const timers = [];
+  let lastErrorReads = 0;
+
+  function node() {
+    return { connect() {}, disconnect() {} };
+  }
+
+  function FakeAudioContext() {
+    this.state = 'running';
+    this.currentTime = 0;
+    this.destination = node();
+    this.closed = false;
+    this.resumes = 0;
+    contexts.push(this);
+  }
+  FakeAudioContext.prototype.resume = function () {
+    this.resumes++;
+    this.state = 'running';
+    return Promise.resolve();
+  };
+  FakeAudioContext.prototype.close = function () {
+    this.closed = true;
+    this.state = 'closed';
+    return Promise.resolve();
+  };
+  FakeAudioContext.prototype.createMediaElementSource = node;
+  FakeAudioContext.prototype.createAnalyser = function () {
+    return Object.assign(node(), { fftSize: 256, getFloatTimeDomainData() {} });
+  };
+  FakeAudioContext.prototype.createGain = function () {
+    return Object.assign(node(), { gain: { value: 1, setTargetAtTime() {} } });
+  };
+  FakeAudioContext.prototype.createDynamicsCompressor = function () {
+    return Object.assign(node(), {
+      threshold: {}, knee: {}, ratio: {}, attack: {}, release: {}
+    });
+  };
+
+  function HTMLMediaElement() {}
+  const media = Object.assign(new HTMLMediaElement(), {
+    currentSrc: 'https://example.com/a.mp3',
+    volume: 1,
+    muted: false,
+    paused: false,
+    readyState: 4,
+    isConnected: true,
+    addEventListener() {}
+  });
+
+  const chrome = {
+    runtime: {
+      id: 'test',
+      // The property the browser sets when it closes a port itself. Reading it
+      // is the whole contract, so the test counts reads.
+      get lastError() { lastErrorReads++; return undefined; },
+      connect() {
+        const port = {
+          disconnected: false,
+          sent: [],
+          postMessage(msg) { port.sent.push(msg); },
+          disconnect() { port.disconnected = true; },
+          onMessage: { addListener: (fn) => { port.receive = fn; } },
+          onDisconnect: { addListener: (fn) => { port.drop = fn; } }
+        };
+        ports.push(port);
+        return port;
+      }
+    }
+  };
+
+  const win = {
+    AudioContext: FakeAudioContext,
+    addEventListener(type, fn) {
+      (windowEvents[type] = windowEvents[type] || []).push(fn);
+    }
+  };
+  win.top = win;
+
+  const doc = {
+    documentElement: {},
+    addEventListener() {},
+    querySelectorAll: (sel) => (sel === 'audio,video' ? [media] : [])
+  };
+
+  function FakeMutationObserver() {
+    this.observe = function () {};
+  }
+
+  new Function(
+    'window', 'document', 'location', 'chrome',
+    'HTMLMediaElement', 'MutationObserver', 'setInterval', 'setTimeout',
+    contentSource
+  )(
+    win, doc,
+    { origin: 'https://example.com', href: 'https://example.com/watch' },
+    chrome, HTMLMediaElement, FakeMutationObserver,
+    () => 0,
+    (fn) => timers.push(fn)
+  );
+
+  return {
+    ports,
+    contexts,
+    lastErrorReads: () => lastErrorReads,
+    fire: (type, event) => (windowEvents[type] || []).forEach((fn) => fn(event)),
+    /** Runs whatever the script has queued, so retries are deterministic. */
+    flush: () => timers.splice(0).forEach((fn) => fn())
+  };
+}
+
+{
+  const vb = loadContent();
+  is(vb.ports.length, 1, 'the frame opens one port on boot');
+  is(vb.ports[0].sent[0].t, 'hello', 'and announces itself to the background');
+
+  // Boost something, so there is a live graph and a context worth keeping.
+  vb.ports[0].receive({ t: 'set', gain: 2, muted: false, limiter: true });
+  is(vb.contexts.length, 1, 'boosting builds the audio graph');
+
+  vb.fire('pagehide', { persisted: true });
+  ok(vb.ports[0].disconnected,
+    'entering the cache closes the port from this side, so the browser does not');
+  is(vb.contexts[0].closed, false,
+    'the context survives the cache, because a routed element cannot be routed again');
+
+  // The browser suspends a context while the page is frozen and leaves it that
+  // way on the way back, so the graph is wired up but passing nothing.
+  vb.contexts[0].state = 'suspended';
+
+  vb.fire('pageshow', { persisted: true });
+  is(vb.ports.length, 2, 'coming back opens a fresh port');
+  is(vb.ports[1].sent[0].t, 'hello', 'and re-announces the frame');
+  is(vb.contexts.length, 1, 'without building a second context');
+  ok(vb.contexts[0].resumes > 0, 'the frozen context is resumed');
+
+  // The frozen frame's own disconnect can be delivered after the restore has
+  // already reconnected. It must not take the new port down with it.
+  vb.ports[0].drop();
+  ok(vb.lastErrorReads() > 0,
+    'a disconnect reads lastError, which is what stops the unchecked-error log');
+  vb.flush();
+  is(vb.ports.length, 2, 'a stale disconnect neither drops nor duplicates the live port');
+  is(vb.ports[1].disconnected, false, 'the live port is still open');
+}
+
+{
+  const vb = loadContent();
+  vb.ports[0].receive({ t: 'set', gain: 2, muted: false, limiter: true });
+  vb.fire('pagehide', { persisted: false });
+  ok(vb.contexts[0].closed, 'a page that is really leaving still closes its context');
+}
+
+{
+  const vb = loadContent();
+  vb.ports[0].drop();
+  is(vb.ports.length, 1, 'an evicted worker is retried on a timer, not instantly');
+  vb.flush();
+  is(vb.ports.length, 2, 'and the frame reconnects');
+
+  vb.fire('pageshow', { persisted: true });
+  is(vb.ports.length, 2, 'a restore with a live port does not register the frame twice');
+}
+
+/* ==================================================================== *
  * Slider mapping
  * ==================================================================== */
 
@@ -134,10 +316,12 @@ function loadBackground() {
   const store = {};
   const badges = {};
   const listeners = {};
+  let lastErrorReads = 0;
 
   const api = {
     runtime: {
       id: 'test',
+      get lastError() { lastErrorReads++; return undefined; },
       onConnect: { addListener: (fn) => { listeners.connect = fn; } },
       onMessage: { addListener: (fn) => { listeners.message = fn; } }
     },
@@ -181,7 +365,7 @@ function loadBackground() {
     listeners.message(msg, {}, resolve);
   });
 
-  return { store, badges, listeners, openFrame, send };
+  return { store, badges, listeners, openFrame, send, lastErrorReads: () => lastErrorReads };
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 5));
@@ -291,6 +475,21 @@ const settle = () => new Promise((r) => setTimeout(r, 5));
   const after = await bg.send({ t: 'get', tabId: 7 });
   is(after.gain, 1, 'closing a tab drops its state');
   is(after.connected, false, 'and reports nothing connected');
+}
+
+{
+  const bg = loadBackground();
+  const frame = bg.openFrame(8, 'https://cached.example');
+  await settle();
+
+  // The browser closes a frame's port when the page goes into the back/forward
+  // cache and reports that here as an error, which is logged as unchecked
+  // unless the listener reads it.
+  frame.port.disconnect();
+  ok(bg.lastErrorReads() > 0, 'a dropped frame reads lastError');
+
+  const after = await bg.send({ t: 'get', tabId: 8 });
+  is(after.connected, false, 'and is removed from the tab');
 }
 
 {

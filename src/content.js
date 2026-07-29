@@ -417,17 +417,31 @@
    * Background link
    * ------------------------------------------------------------------ */
 
+  function closePort() {
+    if (!port) return;
+    try { port.disconnect(); } catch (e) { /* the other end went first */ }
+    port = null;
+    lastStatusKey = '';
+  }
+
   function openPort() {
     if (!api.runtime.id) return;
+    // A live port means someone already reconnected. Restoring from the
+    // back/forward cache and retrying after the worker was evicted can both
+    // land here, and a second port would register this frame twice in the
+    // background, which doubles every count the popup shows.
+    if (port) return;
+
+    var opened;
     try {
-      port = api.runtime.connect({ name: 'vb' });
+      opened = api.runtime.connect({ name: 'vb' });
     } catch (e) {
-      port = null;
       return;
     }
+    port = opened;
     portRetries = 0;
 
-    port.onMessage.addListener(function (msg) {
+    opened.onMessage.addListener(function (msg) {
       if (!msg) return;
       if (msg.t === 'set') {
         if (typeof msg.gain === 'number') {
@@ -443,7 +457,16 @@
       }
     });
 
-    port.onDisconnect.addListener(function () {
+    opened.onDisconnect.addListener(function () {
+      // Reading lastError is what marks it handled. The browser sets it when it
+      // closes the channel itself, and logs "Unchecked runtime.lastError" if
+      // nobody looks. Both causes are routine here: the worker was evicted, or
+      // the page was moved into the back/forward cache.
+      if (api.runtime.lastError) { /* expected, and nothing to do about it */ }
+
+      // A disconnect that arrives after we already reconnected belongs to a
+      // port we have replaced. Acting on it would drop the live one.
+      if (port !== opened) return;
       port = null;
       lastStatusKey = '';
       // The service worker being evicted is normal and frequent. Reconnect with
@@ -454,7 +477,7 @@
     });
 
     try {
-      port.postMessage({
+      opened.postMessage({
         t: 'hello',
         origin: location.origin,
         top: window.top === window,
@@ -499,11 +522,36 @@
     else scheduleStatus();
   }, SWEEP_MS);
 
-  window.addEventListener('pagehide', function () {
+  /*
+   * A page can leave two ways: for good, or into the back/forward cache, from
+   * which it returns with this script's state intact but its port dead. The
+   * browser closes the port on the way in and reports that to the background as
+   * an error, so hand it back ourselves and make the teardown an ordinary one.
+   */
+  window.addEventListener('pagehide', function (event) {
+    closePort();
+
+    // createMediaElementSource() cannot be undone, so closing the context is
+    // permanent silence for every element already routed through it. On a real
+    // teardown that costs nothing, the page is going away. On the way into the
+    // cache the same page comes back, and it comes back mute.
+    if (event.persisted) return;
     if (ctx && ctx.close) {
       try { ctx.close(); } catch (e) {}
       ctx = null;
     }
+  });
+
+  window.addEventListener('pageshow', function (event) {
+    if (!event.persisted) return;
+    portRetries = 0;
+    openPort();
+    // Frozen contexts come back suspended. audioContext() resumes the one we
+    // have and, deliberately, is only called when there is one to resume: a
+    // page that was never boosted should not get a context on the way back.
+    if (ctx) audioContext();
+    lastStatusKey = '';
+    scheduleStatus();
   });
 
   scan(true);
