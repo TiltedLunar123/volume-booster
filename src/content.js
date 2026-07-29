@@ -424,6 +424,15 @@
     lastStatusKey = '';
   }
 
+  // The background being unloaded is routine, so every failed link has to lead
+  // back to another attempt. A frame that stops trying is a page the slider
+  // silently does nothing on.
+  function retryPort() {
+    if (!api.runtime.id || portRetries > 12) return;
+    portRetries++;
+    setTimeout(openPort, Math.min(500 * portRetries, 5000));
+  }
+
   function openPort() {
     if (!api.runtime.id) return;
     // A live port means someone already reconnected. Restoring from the
@@ -436,6 +445,7 @@
     try {
       opened = api.runtime.connect({ name: 'vb' });
     } catch (e) {
+      retryPort();
       return;
     }
     port = opened;
@@ -471,9 +481,7 @@
       lastStatusKey = '';
       // The service worker being evicted is normal and frequent. Reconnect with
       // backoff, but give up if the extension itself is gone.
-      if (!api.runtime.id || portRetries > 12) return;
-      portRetries++;
-      setTimeout(openPort, Math.min(500 * portRetries, 5000));
+      retryPort();
     });
 
     try {
@@ -481,10 +489,16 @@
         t: 'hello',
         origin: location.origin,
         top: window.top === window,
+        // What this frame is currently set to. After the background has been
+        // unloaded it has no memory of the tab, and if remembering is off there
+        // is nothing on disk either, so this is the only surviving record.
+        gain: desired,
+        muted: muted,
         status: status()
       });
     } catch (e) {
       port = null;
+      retryPort();
     }
   }
 

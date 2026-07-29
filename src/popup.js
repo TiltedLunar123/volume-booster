@@ -339,10 +339,16 @@ function boot() {
         // The page was probably open before the extension was installed.
         return send({ t: 'inject', tabId: tab.id }).then(function (res) {
           if (res && res.ok && res.state) adopt(res.state);
-          if (!state.connected) {
-            blocked('This page was loaded before the extension could attach, ' +
-              'or the browser blocks extensions here. Try reloading the page.');
-          }
+          if (state.connected) return;
+
+          // Frames on a busy page can take longer to open their ports than the
+          // background waits before answering, so this is a guess rather than a
+          // verdict. Say what is known, keep polling, and let a connection that
+          // arrives a moment later clear it.
+          showNotice('Not attached yet',
+            'This page may have been open before the extension was installed. ' +
+            'If the slider does nothing, reload the page.');
+          statusEl.textContent = 'Not available here';
         });
       });
     })

@@ -112,12 +112,13 @@ ok(classify({ currentSrc: 'blob:https://example.com/x', mediaKeys: {} }) === 'pr
 
 describe('content.js back/forward cache');
 
-function loadContent() {
+function loadContent(options = {}) {
   const windowEvents = {};
   const ports = [];
   const contexts = [];
   const timers = [];
   let lastErrorReads = 0;
+  let connectCalls = 0;
 
   function node() {
     return { connect() {}, disconnect() {} };
@@ -172,6 +173,10 @@ function loadContent() {
       // is the whole contract, so the test counts reads.
       get lastError() { lastErrorReads++; return undefined; },
       connect() {
+        // The background can refuse a connection while it is starting.
+        if (options.refuseFirstConnect && ++connectCalls === 1) {
+          throw new Error('receiving end does not exist');
+        }
         const port = {
           disconnected: false,
           sent: [],
@@ -279,6 +284,16 @@ function loadContent() {
   is(vb.ports.length, 2, 'a restore with a live port does not register the frame twice');
 }
 
+{
+  // A frame that gives up here is a page where the slider silently does
+  // nothing, with no event left that would make it try again.
+  const vb = loadContent({ refuseFirstConnect: true });
+  is(vb.ports.length, 0, 'a refused connection opens no port');
+  vb.flush();
+  is(vb.ports.length, 1, 'and is retried rather than abandoning the frame');
+  is(vb.ports[0]?.sent[0]?.t, 'hello', 'the retry announces itself normally');
+}
+
 /* ==================================================================== *
  * Slider mapping
  * ==================================================================== */
@@ -346,8 +361,12 @@ function loadBackground() {
 
   new Function('browser', backgroundSource)(api);
 
-  /** Simulates a content script frame opening its port. */
-  function openFrame(tabId, origin, top = true) {
+  /**
+   * Simulates a content script frame opening its port. `live` is what the
+   * frame is already set to, which is how a frame that outlived the background
+   * reports a level nothing else remembers.
+   */
+  function openFrame(tabId, origin, top = true, live = {}) {
     const sent = [];
     const port = {
       name: 'vb',
@@ -357,7 +376,11 @@ function loadBackground() {
       onMessage: { addListener: (fn) => { port.receive = fn; } }
     };
     listeners.connect(port);
-    port.receive({ t: 'hello', origin, top, status: { media: 1, boosted: 0 } });
+    port.receive({
+      t: 'hello', origin, top,
+      gain: live.gain, muted: live.muted,
+      status: { media: 1, boosted: 0 }
+    });
     return { port, sent };
   }
 
@@ -475,6 +498,40 @@ const settle = () => new Promise((r) => setTimeout(r, 5));
   const after = await bg.send({ t: 'get', tabId: 7 });
   is(after.gain, 1, 'closing a tab drops its state');
   is(after.connected, false, 'and reports nothing connected');
+}
+
+{
+  const bg = loadBackground();
+  bg.store.sites = { 'https://race.example': { g: 3, m: false, t: 1 } };
+  bg.openFrame(9, 'https://race.example');
+
+  // No settle: the user moves the slider while the storage read for this site
+  // is still in flight, which is a few milliseconds wide on every page load.
+  await bg.send({ t: 'set', tabId: 9, gain: 5, muted: false });
+  await settle();
+
+  const after = await bg.send({ t: 'get', tabId: 9 });
+  is(after.gain, 5, 'a level chosen during the storage read survives it');
+  is(bg.badges[9], '500%', 'and the badge is not rolled back either');
+}
+
+{
+  const bg = loadBackground();
+  // Nothing stored is what a restarted background sees when remembering is
+  // off, and the frame is then the only thing that knows the level.
+  const frame = bg.openFrame(10, 'https://live.example', true, { gain: 4, muted: false });
+  await settle();
+
+  const after = await bg.send({ t: 'get', tabId: 10 });
+  is(after.gain, 4, 'a frame that is already boosted keeps its level across a restart');
+  is(bg.badges[10], '400%', 'and the badge comes back with it');
+  ok(!frame.sent.some((m) => m.t === 'set' && m.gain === 1),
+    'the frame is never told to drop back to 100%');
+
+  // The same path on a real navigation, where the new page reports 100%.
+  const fresh = bg.openFrame(10, 'https://elsewhere.example', true, { gain: 1 });
+  await settle();
+  is(fresh.sent[fresh.sent.length - 1].gain, 1, 'a new site still starts at 100%');
 }
 
 {

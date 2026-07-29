@@ -96,7 +96,9 @@ function saveSite(origin, gain, muted) {
 function stateFor(tabId) {
   var st = tabs.get(tabId);
   if (!st) {
-    st = { gain: 1, muted: false, origin: null, frames: new Map() };
+    // epoch counts deliberate changes, so an async read that started earlier
+    // can tell whether it is about to overwrite a newer choice.
+    st = { gain: 1, muted: false, origin: null, epoch: 0, frames: new Map() };
     tabs.set(tabId, st);
   }
   return st;
@@ -230,11 +232,29 @@ api.runtime.onConnect.addListener(function (port) {
 
     // The top frame moved to a different site. Adopt that site's saved level.
     cur.origin = msg.origin;
+    var epoch = cur.epoch;
     loadSite(msg.origin).then(function (saved) {
       var latest = tabs.get(tabId);
       if (!latest || latest.origin !== msg.origin) return;
-      latest.gain = saved && opts.remember ? saved.gain : 1;
-      latest.muted = saved && opts.remember ? saved.muted : false;
+
+      // Reading storage takes long enough for the user to have moved the
+      // slider in the meantime, and what they just chose beats what was on
+      // disk when the page loaded.
+      if (latest.epoch !== epoch) return;
+
+      if (saved && opts.remember) {
+        latest.gain = saved.gain;
+        latest.muted = saved.muted;
+      } else {
+        // Nothing saved for this site, either because it is new or because
+        // remembering is off. A frame that is already running knows what the
+        // tab was set to, and after the background has been unloaded that is
+        // the only record of it left. A freshly loaded page reports 100%, so
+        // this resets on a real navigation the way it should.
+        latest.gain = typeof msg.gain === 'number' ? msg.gain : 1;
+        latest.muted = !!msg.muted;
+      }
+
       broadcast(latest);
       updateBadge(tabId, latest);
     });
@@ -253,6 +273,7 @@ function applyLevel(tabId, gain, muted) {
   var st = stateFor(tabId);
   if (typeof gain === 'number') st.gain = Math.max(0, Math.min(MAX_GAIN, gain));
   if (typeof muted === 'boolean') st.muted = muted;
+  st.epoch++;
   broadcast(st);
   updateBadge(tabId, st);
   if (st.origin) saveSite(st.origin, st.gain, st.muted);
