@@ -224,7 +224,7 @@ not linked.
 | Field | Value |
 | --- | --- |
 | Name | Volume Booster |
-| Slug | edit it. AMO offered `volume-booster1`, which reads as a duplicate |
+| Slug | `volume-booster-slider`. Plain `volume-booster` is taken, as are `volume-booster-600` and `tab-volume-booster` |
 | Summary | prefilled from the manifest, 111 chars against a 250 limit |
 | Experimental | no |
 | Requires payment or hardware | no |
@@ -233,6 +233,13 @@ not linked.
 | Support website | https://github.com/TiltedLunar123/volume-booster/issues |
 | License | MIT |
 | Has a privacy policy | yes, paste the text |
+
+The slug keeps the exact phrase "volume booster" at the front, since that is
+what people search, and differentiates on the actual feature. It does not affect
+the add-on name, which stays Volume Booster in search results and the install
+prompt. Also free when checked on 2026-07-29: one-slider-volume-booster,
+simple-volume-booster, volume-boost-slider, volume-booster-tab,
+volume-slider-booster, boost-tab-volume.
 
 Only one category genuinely fits. Tabs means tab management and Privacy &
 Security describes how it behaves rather than what it does, so filling all three
