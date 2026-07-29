@@ -117,11 +117,19 @@ const TO = [0x3a, 0xdb, 0x74];   // bright green
 
 /* ------------------------------ render ------------------------------- */
 
-function render(size) {
-  const arcs = size >= 48
+/**
+ * @param size    output canvas in pixels
+ * @param tile    fraction of the canvas the tile fills. 1 is full bleed, which
+ *                is what the toolbar wants. The Chrome Web Store listing icon
+ *                wants a 96x96 tile inside a 128x128 canvas, so 0.75 there.
+ */
+function render(size, tile = 1) {
+  const glyphSize = size * tile;
+  const arcs = glyphSize >= 48
     ? [{ r: 0.20, w: 0.062 }, { r: 0.315, w: 0.062 }]
     : [{ r: 0.245, w: 0.105 }];
   const radius = 0.225;
+  const inset = (1 - tile) / 2;
   const out = Buffer.alloc(size * size * 4);
 
   for (let py = 0; py < size; py++) {
@@ -132,8 +140,9 @@ function render(size) {
 
       for (let sy = 0; sy < SS; sy++) {
         for (let sx = 0; sx < SS; sx++) {
-          const x = (px + (sx + 0.5) / SS) / size;
-          const y = (py + (sy + 0.5) / SS) / size;
+          const x = ((px + (sx + 0.5) / SS) / size - inset) / tile;
+          const y = ((py + (sy + 0.5) / SS) / size - inset) / tile;
+          if (x < 0 || x > 1 || y < 0 || y > 1) continue;
           if (!inRoundedSquare(x, y, radius)) continue;
           bgHits++;
           gradSum += (x + y) / 2;
@@ -162,9 +171,21 @@ function render(size) {
   return encodePng(size, size, out);
 }
 
+const ROOT = path.join(HERE, '..');
+const rel = (file) => path.relative(ROOT, file).replace(/\\/g, '/');
+
 fs.mkdirSync(OUT, { recursive: true });
 for (const size of SIZES) {
   const file = path.join(OUT, `icon-${size}.png`);
   fs.writeFileSync(file, render(size));
-  console.log(`wrote ${path.relative(path.join(HERE, '..'), file)} (${size}x${size})`);
+  console.log(`wrote ${rel(file)} (${size}x${size})`);
 }
+
+// Listing art, not shipped in the extension package. Chrome asks for a 96x96
+// tile centred in a 128x128 canvas with the remaining 16px per side left
+// transparent, which is not what the toolbar icon wants.
+const STORE = path.join(ROOT, 'store');
+fs.mkdirSync(STORE, { recursive: true });
+const storeIcon = path.join(STORE, 'store-icon-128.png');
+fs.writeFileSync(storeIcon, render(128, 0.75));
+console.log(`wrote ${rel(storeIcon)} (128x128, 96x96 tile plus 16px padding)`);
