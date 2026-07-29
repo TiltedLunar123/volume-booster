@@ -1,9 +1,7 @@
-One slider in your toolbar, 0% to 600%, with a notch at 100% so normal is easy to find again. It remembers the level you picked for every site.
+Going back a page no longer costs you the sound. When Firefox restored a page from its back/forward cache, the audio could come back silent until you reloaded it. It comes back working now, with your level still applied.
 
-Above 100% a limiter keeps loud audio from turning to crackle. Presets, mute and keyboard shortcuts are in the popup, along with a reset that clears every site at once.
+Levels stop drifting on their own. A level you set while a page was still loading could snap back to whatever was saved for that site, and with remembering turned off a boost could quietly return to 100% by itself after a while. Both are fixed.
 
-Going back a page keeps your sound. A page the browser restores from its back/forward cache comes back with the audio working and the level still applied.
+The popup is slower to give up. On a busy page it could decide it was not able to run before the page had finished attaching, and then stay that way until you closed and reopened it. It waits now, and corrects itself once the page is ready.
 
-DRM audio won't boost. Netflix, Spotify, Prime Video and the rest encrypt it, and Firefox doesn't let any add-on near that. Same story on the few sites that serve audio from a separate domain without the header that permits access. You can still turn the volume down in both cases, and the popup says which one you've hit instead of quietly doing nothing.
-
-No tracking, no network calls, no account to sign up for. Full source on GitHub under the MIT license.
+No new permissions.

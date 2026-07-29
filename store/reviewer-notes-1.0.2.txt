@@ -1,0 +1,72 @@
+SOURCE CODE AND BUILD
+
+This add-on is not bundled, minified, transpiled or generated. Every file in the
+package is the source itself, byte for byte identical to the repository, so it
+can be read directly with no source submission needed.
+
+To reproduce the package anyway:
+
+1. git clone https://github.com/TiltedLunar123/volume-booster
+2. git checkout b520819
+3. node tools/build.mjs
+
+Step 3 installs nothing, because the repository has no dependencies at all. It
+copies src/ into dist/firefox/, uses src/manifest.firefox.json as manifest.json,
+and writes dist/volume-booster-firefox-v1.0.2.zip. No file contents are altered
+along the way. Built and verified here with Node 24, using only Node's standard
+library.
+
+node tools/build.mjs --check runs the project's own validation, including a
+check that fails the build if fetch, XMLHttpRequest, WebSocket, eval or
+importScripts ever appear in the shipped scripts.
+
+PERMISSIONS
+
+The content script matches <all_urls> because the audio it controls belongs to
+the page, and there is no narrower way to reach a media element on an arbitrary
+site. There are no host_permissions, no tabs permission and no tabCapture. The
+public description states this in plain words rather than leaving users to infer
+it from the install prompt.
+
+storage keeps a map of origin to volume level. activeTab tells the popup which
+tab to apply a level to. scripting attaches the content script to a tab that was
+already open when the add-on was installed.
+
+DATA
+
+Nothing is transmitted. The add-on makes no network requests of any kind and has
+no server, no analytics and no remote configuration, which is why
+data_collection_permissions is declared as none. The only thing written to disk
+is the origin to level map above, capped at 300 entries, and it never leaves the
+device.
+
+WHAT CHANGED IN THIS VERSION
+
+Mostly the back/forward cache. A page restored from it could come back silent,
+because the add-on closed its AudioContext on pagehide, and a media element that
+has already been through createMediaElementSource cannot be routed a second
+time. It now keeps the context when the page is only being cached rather than
+discarded, and reopens its port on pageshow. The rest are smaller fixes to
+holding a level across a background restart, and to the popup giving up too
+early on a slow page. No permissions changed.
+
+TESTING IT
+
+Any page with an audio or video element will do. test/fixtures/media.html in the
+repository generates its own tone and needs no network access, so it is a
+convenient target.
+
+Two things are expected not to work, so they are not defects:
+
+DRM audio (Netflix, Spotify, Amazon, Apple) cannot be routed through Web Audio
+at all. The add-on detects encrypted media and deliberately declines to attach,
+because attaching would silence the page permanently with no way to undo it.
+
+Media served from another origin without CORS headers is the same story, since
+the resulting node would output silence. The add-on declines there too.
+
+In both cases the popup says which of the two it hit rather than appearing to do
+nothing, and reducing volume below 100% still works, because that path sets the
+media element's own volume property instead.
+
+Keyboard shortcuts are Alt+Shift+Up, Alt+Shift+Down, Alt+Shift+0 and Alt+Shift+M.
