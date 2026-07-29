@@ -367,6 +367,39 @@ const ASSETS = [
     })
   },
   {
+    // YouTube thumbnail. Sized so the hook and the percentage still read at the
+    // ~210px wide the browse feed actually shows, which is the only size that
+    // matters. Two colours, four words, one focal element.
+    file: 'youtube-thumb-1280x720.png',
+    width: 1280,
+    height: 720,
+    html: frame({
+      width: 1280,
+      height: 720,
+      css: `
+        /* Keep the shared flex:1 here. Pinning it to flex:none collapses the
+           gap and lets the popup sit on top of the headline. */
+        .copy { padding: 0 0 0 76px; max-width: 560px; }
+        h1 { font-size: 106px; line-height: 0.92; letter-spacing: -0.045em; margin: 0 0 30px;
+             text-shadow: 0 8px 28px rgba(0,0,0,0.6); }
+        h1 .accent { color: #f59e0b; }
+        .tag { display: inline-block; font-size: 23px; font-weight: 700; color: #0b0d10;
+               background: #22c55e; border-radius: 999px; padding: 11px 22px;
+               letter-spacing: -0.01em; }
+        .stage { flex: none; padding-right: 56px; }
+        .popup { border-radius: 18px;
+                 box-shadow: 0 40px 90px rgba(0,0,0,0.72), 0 0 0 1px rgba(255,255,255,0.07); }`,
+      body: `
+        <div class="copy">
+          <h1>MAKE IT<br><span class="accent">LOUDER</span></h1>
+          <span class="tag">Chrome + Firefox</span>
+        </div>
+        <div class="stage">${popup({
+          gain: 4.8, host: 'youtube.com', status: '3 sources boosted', scale: 1.78
+        })}</div>`
+    })
+  },
+  {
     file: 'promo-small-440x280.png',
     width: 440,
     height: 280,

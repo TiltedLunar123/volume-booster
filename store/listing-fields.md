@@ -204,6 +204,11 @@ the page loads.
 
     volume booster,chrome extension,volume booster extension,increase volume chrome,boost volume browser,sound booster,volume amplifier,firefox addon,browser extension,volume control,audio boost,make video louder,quiet video fix,youtube volume booster,twitch volume,web audio api,open source extension,manifest v3,privacy extension,chrome web store
 
-**Thumbnail:** `volume-booster-thumb-PROMPT.txt`. Generate the art from that
-prompt, then composite the overlay hook on the left negative space. The art is
-deliberately not rendered here; it is generated from the prompt each time.
+**Thumbnail:** `youtube-thumb-1280x720.png`, rendered by
+`tools/make-store-art.mjs` alongside the store images. 1280x720, 24-bit RGB,
+about 217 KB against YouTube's 2 MB limit.
+
+Hook is MAKE IT / LOUDER, white over amber, with the real popup at 480% on the
+right so the readout and the warmed slider carry the colour. Checked at 210px
+wide, the size the browse feed actually renders: the hook and the percentage
+both still read, and everything else drops to texture, which is the intent.
