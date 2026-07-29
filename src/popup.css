@@ -1,0 +1,421 @@
+/* Volume Booster popup. One screen, no scrolling, no settings page. */
+
+/* Neutral greys plus a level-meter ramp: green below unity, warming to red at
+   the top of the range, so the colour under the thumb encodes the level. */
+:root {
+  color-scheme: dark light;
+
+  --bg: #0e1013;
+  --surface: #17191e;
+  --surface-2: #202329;
+  --line: #2b2f36;
+  --text: #eef0f3;
+  --dim: #8d939c;
+  --accent: #22c55e;
+  --hot: #f59e0b;
+  --danger: #ef4444;
+  --ring: rgba(34, 197, 94, 0.42);
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #ffffff;
+    --surface: #f6f7f8;
+    --surface-2: #eceef1;
+    --line: #e1e4e8;
+    --text: #14161a;
+    --dim: #5f6570;
+    --accent: #16a34a;
+    --hot: #d97706;
+    --danger: #dc2626;
+    --ring: rgba(22, 163, 74, 0.3);
+    --shadow: 0 2px 8px rgba(20, 22, 26, 0.12);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  width: 320px;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Suppress the first paint's transitions so restoring a level does not animate
+   up from 100% every time the popup opens. */
+.app.is-booting * { transition: none !important; }
+
+/* ---- header ---- */
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.host {
+  font-size: 11px;
+  color: var(--dim);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: right;
+}
+
+/* ---- readout ---- */
+
+.readout {
+  text-align: center;
+  font-size: 46px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 0 0;
+  transition: color 120ms ease;
+}
+
+.readout .unit {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--dim);
+  margin-left: 2px;
+  letter-spacing: 0;
+}
+
+.readout.is-muted { color: var(--dim); }
+.readout.is-hot { color: var(--hot); }
+.readout.is-max { color: var(--danger); }
+
+/* ---- slider ---- */
+
+.slider {
+  position: relative;
+  height: 30px;
+}
+
+.track {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 11px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+/* Flat green up to the 100% detent at 40%, then warming through the boost
+   range, so the colour is telling the truth about how hard the gain is pushed. */
+.grad {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    var(--accent) 0%,
+    var(--accent) 40%,
+    var(--hot) 74%,
+    var(--danger) 100%);
+  clip-path: inset(0 60% 0 0);
+}
+
+.detent {
+  position: absolute;
+  top: 9px;
+  left: calc(40% + 1px);
+  width: 2px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--line);
+  pointer-events: none;
+}
+
+.slider input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 3px solid var(--accent);
+  box-shadow: var(--shadow);
+  transition: box-shadow 120ms ease, transform 120ms ease;
+}
+
+.slider input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 3px solid var(--accent);
+  box-shadow: var(--shadow);
+}
+
+.slider input[type="range"]::-moz-range-track {
+  background: transparent;
+  border: none;
+}
+
+.slider input[type="range"]:focus { outline: none; }
+
+.slider input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--ring);
+}
+
+.slider input[type="range"]:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px var(--ring);
+}
+
+.slider input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.08);
+}
+
+.scale {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--dim);
+  margin-top: -8px;
+}
+
+.scale .mid {
+  position: absolute;
+  left: calc(40% + 1px);
+  transform: translateX(-50%);
+}
+
+/* ---- presets ---- */
+
+.presets {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.presets button {
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 90ms ease, border-color 90ms ease, color 90ms ease;
+}
+
+.presets button:hover { background: var(--surface-2); }
+
+.presets button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ---- controls row ---- */
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mute {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 90ms ease, border-color 90ms ease, color 90ms ease;
+}
+
+.mute:hover { background: var(--surface-2); }
+
+.mute[aria-pressed="true"] {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.status {
+  flex: 1;
+  text-align: right;
+  font-size: 11px;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- footer ---- */
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--dim);
+  user-select: none;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.sw {
+  width: 28px;
+  height: 16px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  position: relative;
+  transition: background 120ms ease, border-color 120ms ease;
+  flex: none;
+}
+
+.knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dim);
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.switch input:checked + .sw {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.switch input:checked + .sw .knob {
+  transform: translateX(12px);
+  background: #fff;
+}
+
+.switch input:focus-visible + .sw {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--dim);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.link:hover { color: var(--danger); text-decoration: underline; }
+.link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* ---- notice ---- */
+
+.notice {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--dim);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 10px;
+}
+
+.notice strong {
+  display: block;
+  color: var(--text);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+/* ---- disabled page ---- */
+
+.app.is-blocked .slider,
+.app.is-blocked .presets,
+.app.is-blocked .readout,
+.app.is-blocked .mute,
+.app.is-blocked .scale {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+button:focus-visible,
+.presets button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

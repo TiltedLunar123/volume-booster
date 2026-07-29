@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "Volume Booster",
+  "version": "1.0.0",
+  "description": "Boost any tab's volume up to 600% with one slider. Remembers the level per site. No tracking, no network calls.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Volume Booster",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "all_frames": true,
+      "match_about_blank": true,
+      "run_at": "document_start"
+    }
+  ],
+  "commands": {
+    "boost-up": {
+      "suggested_key": { "default": "Alt+Shift+Up" },
+      "description": "Increase volume by 25%"
+    },
+    "boost-down": {
+      "suggested_key": { "default": "Alt+Shift+Down" },
+      "description": "Decrease volume by 25%"
+    },
+    "boost-reset": {
+      "suggested_key": { "default": "Alt+Shift+0" },
+      "description": "Reset this tab to 100%"
+    },
+    "boost-mute": {
+      "suggested_key": { "default": "Alt+Shift+M" },
+      "description": "Toggle mute"
+    }
+  }
+}

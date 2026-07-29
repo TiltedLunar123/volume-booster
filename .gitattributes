@@ -1,0 +1,5 @@
+# Keep line endings stable across platforms so the packaged zips are identical
+# no matter who builds them.
+* text=auto eol=lf
+
+*.png binary

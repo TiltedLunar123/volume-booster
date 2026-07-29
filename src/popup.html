@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Volume Booster</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main id="app" class="app is-booting">
+    <header class="head">
+      <div class="brand"><span class="dot"></span>Volume Booster</div>
+      <div class="host" id="host"></div>
+    </header>
+
+    <div class="readout" id="readout">
+      <span id="value">100</span><span class="unit">%</span>
+    </div>
+
+    <div class="slider">
+      <div class="track"><div class="grad" id="grad"></div></div>
+      <div class="detent" aria-hidden="true"></div>
+      <input id="range" type="range" min="0" max="1000" step="1" value="400"
+             aria-label="Volume level" aria-valuetext="100%">
+    </div>
+
+    <div class="scale" aria-hidden="true">
+      <span>0%</span><span class="mid">100%</span><span>600%</span>
+    </div>
+
+    <div class="presets" id="presets">
+      <button type="button" data-gain="1">100</button>
+      <button type="button" data-gain="1.5">150</button>
+      <button type="button" data-gain="2">200</button>
+      <button type="button" data-gain="3">300</button>
+      <button type="button" data-gain="5">500</button>
+    </div>
+
+    <div class="row">
+      <button type="button" id="mute" class="mute" aria-pressed="false">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+          <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+          <path id="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"
+                fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path id="cross" d="M17 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" hidden/>
+        </svg>
+        <span id="muteLabel">Mute</span>
+      </button>
+      <div class="status" id="status"></div>
+    </div>
+
+    <footer class="foot">
+      <label class="switch">
+        <input type="checkbox" id="remember" checked>
+        <span class="sw" aria-hidden="true"><span class="knob"></span></span>
+        <span class="swtext">Remember levels</span>
+      </label>
+      <button type="button" id="resetAll" class="link">Reset all</button>
+    </footer>
+
+    <div class="notice" id="notice" hidden></div>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>

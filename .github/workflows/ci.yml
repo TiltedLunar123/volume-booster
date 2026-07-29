@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Validate sources and manifests
+        run: node tools/build.mjs --check
+
+      - name: Unit tests
+        run: node test/unit.mjs
+
+      - name: Icons are reproducible from source
+        run: |
+          node tools/make-icons.mjs
+          if ! git diff --quiet -- src/icons; then
+            echo "src/icons differs from what tools/make-icons.mjs produces"
+            git diff --stat -- src/icons
+            exit 1
+          fi
+
+      - name: Build packages
+        run: node tools/build.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-packages
+          path: dist/*.zip
+          if-no-files-found: error

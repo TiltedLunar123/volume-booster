@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Volume Booster test fixture</title>
+<style>
+  :root { color-scheme: dark light; }
+  body {
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    max-width: 760px; margin: 0 auto; padding: 32px 20px 64px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .lede { color: #6b7280; margin: 0 0 28px; }
+  section { border: 1px solid #8883; border-radius: 10px; padding: 14px 16px; margin: 0 0 14px; }
+  h2 { font-size: 14px; margin: 0 0 4px; }
+  p.what { margin: 0 0 10px; color: #6b7280; font-size: 13px; }
+  audio { width: 100%; }
+  button { font: inherit; padding: 6px 12px; border-radius: 7px; border: 1px solid #8886;
+           background: #8881; cursor: pointer; }
+  input[type=url] { font: inherit; padding: 6px 9px; width: 60%; border-radius: 7px;
+                    border: 1px solid #8886; background: transparent; color: inherit; }
+  code { background: #8881; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .expect { font-size: 12.5px; margin: 8px 0 0; }
+  .expect b { font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>Volume Booster test fixture</h1>
+<p class="lede">
+  Every clip below is generated in the page, so nothing is downloaded and the
+  file works offline. Open the extension popup and drag the slider while one is
+  playing.
+</p>
+
+<section>
+  <h2>1. Plain same-origin audio</h2>
+  <p class="what">A blob URL, which is what MSE players like YouTube and Twitch use.</p>
+  <audio id="basic" controls loop></audio>
+  <p class="expect"><b>Expect:</b> boosts, popup reports at least one source boosted.</p>
+</section>
+
+<section>
+  <h2>2. Element added after load</h2>
+  <p class="what">Appended three seconds late, to exercise the MutationObserver.</p>
+  <div id="lateSlot"><em style="color:#6b7280">waiting...</em></div>
+  <p class="expect"><b>Expect:</b> the source count goes up on its own, and the
+    current level is applied to it without touching the slider.</p>
+</section>
+
+<section>
+  <h2>3. Never added to the DOM</h2>
+  <p class="what"><code>new Audio()</code> that is played without ever being
+    appended, which no DOM scan can find.</p>
+  <button id="detachedBtn" type="button">Play detached audio</button>
+  <p class="expect"><b>Expect:</b> caught by the capture-phase play listener and
+    boosted anyway.</p>
+</section>
+
+<section>
+  <h2>4. Inside an open shadow root</h2>
+  <p class="what">Invisible to <code>document.querySelectorAll</code>.</p>
+  <div id="shadowHost"></div>
+  <p class="expect"><b>Expect:</b> picked up by the deep sweep within ten seconds.</p>
+</section>
+
+<section>
+  <h2>5. Same-origin iframe</h2>
+  <p class="what">The iframe runs its own copy of the content script.</p>
+  <iframe id="frame" style="width:100%;height:64px;border:0" title="nested player"></iframe>
+  <p class="expect"><b>Expect:</b> boosts, and the popup counts it in the total.</p>
+</section>
+
+<section>
+  <h2>6. Cross-origin audio without CORS</h2>
+  <p class="what">
+    The dangerous case. Paste any audio URL from another domain that does not
+    send an <code>Access-Control-Allow-Origin</code> header. Needs a network
+    connection, unlike the rest of this page.
+  </p>
+  <input type="url" id="remoteUrl" placeholder="https://example.com/audio.mp3">
+  <button id="remoteBtn" type="button">Load</button>
+  <audio id="remote" controls loop style="margin-top:10px"></audio>
+  <p class="expect"><b>Expect:</b> the popup says <b>Boost unavailable</b> and the
+    audio keeps playing normally. If it goes silent, that is the bug this whole
+    design exists to prevent.</p>
+</section>
+
+<script>
+// A quiet two-second loop, built as a WAV in memory. Deliberately low amplitude
+// so that a 600% boost is obvious but not painful.
+function makeTone(frequency, seconds, amplitude) {
+  const rate = 22050;
+  const frames = Math.floor(rate * seconds);
+  const buffer = new ArrayBuffer(44 + frames * 2);
+  const view = new DataView(buffer);
+  const ascii = (offset, text) => {
+    for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+  };
+
+  ascii(0, 'RIFF');
+  view.setUint32(4, 36 + frames * 2, true);
+  ascii(8, 'WAVEfmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  ascii(36, 'data');
+  view.setUint32(40, frames * 2, true);
+
+  for (let i = 0; i < frames; i++) {
+    // Gentle envelope so the loop point does not click.
+    const t = i / rate;
+    const envelope = Math.min(1, t * 8, (seconds - t) * 8);
+    const sample = Math.sin(2 * Math.PI * frequency * t) * amplitude * envelope;
+    view.setInt16(44 + i * 2, sample * 32767, true);
+  }
+
+  return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+}
+
+const quietTone = makeTone(220, 2, 0.06);
+
+document.getElementById('basic').src = quietTone;
+
+setTimeout(() => {
+  const slot = document.getElementById('lateSlot');
+  slot.textContent = '';
+  const late = document.createElement('audio');
+  late.controls = true;
+  late.loop = true;
+  late.src = makeTone(330, 2, 0.06);
+  slot.appendChild(late);
+}, 3000);
+
+let detached = null;
+document.getElementById('detachedBtn').addEventListener('click', () => {
+  if (!detached) {
+    detached = new Audio(makeTone(440, 2, 0.06));
+    detached.loop = true;
+  }
+  if (detached.paused) {
+    detached.play();
+    document.getElementById('detachedBtn').textContent = 'Stop detached audio';
+  } else {
+    detached.pause();
+    document.getElementById('detachedBtn').textContent = 'Play detached audio';
+  }
+});
+
+const shadow = document.getElementById('shadowHost').attachShadow({ mode: 'open' });
+const shadowAudio = document.createElement('audio');
+shadowAudio.controls = true;
+shadowAudio.loop = true;
+shadowAudio.style.width = '100%';
+shadowAudio.src = makeTone(165, 2, 0.06);
+shadow.appendChild(shadowAudio);
+
+document.getElementById('frame').srcdoc =
+  '<body style="margin:0;font:13px system-ui">' +
+  '<audio controls loop style="width:100%" src="' + makeTone(550, 2, 0.06) + '"></audio>' +
+  '</body>';
+
+document.getElementById('remoteBtn').addEventListener('click', () => {
+  const url = document.getElementById('remoteUrl').value.trim();
+  if (url) document.getElementById('remote').src = url;
+});
+</script>
+</body>
+</html>
