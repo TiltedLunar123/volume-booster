@@ -199,3 +199,11 @@ Worth having ready if a reviewer pushes back. Injecting on demand with
 their saved level applied, which removes the per-site memory the extension
 exists to provide. The declared content script is what makes the level apply as
 the page loads.
+
+**Tags** (344 of the 500 character allowance)
+
+    volume booster,chrome extension,volume booster extension,increase volume chrome,boost volume browser,sound booster,volume amplifier,firefox addon,browser extension,volume control,audio boost,make video louder,quiet video fix,youtube volume booster,twitch volume,web audio api,open source extension,manifest v3,privacy extension,chrome web store
+
+**Thumbnail:** `volume-booster-thumb-PROMPT.txt`. Generate the art from that
+prompt, then composite the overlay hook on the left negative space. The art is
+deliberately not rendered here; it is generated from the prompt each time.
