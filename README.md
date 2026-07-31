@@ -28,7 +28,7 @@ No accounts, no tracking, no network calls, no build step.
 
 ## Install
 
-Not on the Chrome Web Store or AMO yet. To run it now:
+Submitted to addons.mozilla.org and awaiting review. To run it now:
 
 ```bash
 node tools/build.mjs
