@@ -169,8 +169,10 @@ function render(skipSlider) {
 
   muteEl.setAttribute('aria-pressed', state.muted ? 'true' : 'false');
   muteLabelEl.textContent = state.muted ? 'Unmute' : 'Mute';
-  wavesEl.hidden = state.muted;
-  crossEl.hidden = !state.muted;
+  // These two are svg paths, and svg elements ignore `hidden`: the property
+  // belongs to HTMLElement. Display is honored everywhere.
+  wavesEl.style.display = state.muted ? 'none' : '';
+  crossEl.style.display = state.muted ? '' : 'none';
 
   statusEl.textContent = statusText();
   renderNotice();

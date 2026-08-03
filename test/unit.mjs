@@ -715,6 +715,31 @@ function answering(snapshot) {
 }
 
 {
+  // The mute glyphs are svg paths, and svg elements ignore the `hidden`
+  // property: it belongs to HTMLElement. Only display actually toggles them,
+  // so this asserts on display, which holds in a real document.
+  const snapshot = {
+    connected: true, gain: 2, muted: false, origin: 'https://a.example',
+    agg: { media: 1, boosted: 1, silenced: 0, protectedCount: 0, taintedCount: 0, suspended: false },
+    opts: { remember: true }
+  };
+  const popup = loadPopup({ handle: answering(snapshot) });
+  await settle();
+  popup.flush();
+
+  is(popup.els.cross.style.display, 'none', 'unmuted shows no strike-through');
+  ok(popup.els.waves.style.display !== 'none', 'and draws the sound waves');
+
+  popup.els.mute.fire('click');
+  is(popup.els.waves.style.display, 'none', 'muting hides the waves');
+  ok(popup.els.cross.style.display !== 'none', 'and draws the strike-through');
+  is(popup.els.muteLabel.textContent, 'Unmute', 'while the label flips');
+
+  popup.els.mute.fire('click');
+  is(popup.els.cross.style.display, 'none', 'unmuting flips both back');
+}
+
+{
   // A page that was open before install. The boot path explains how to fix
   // it; the 800ms poll answering "still nothing" must not erase the advice.
   const snapshot = {
