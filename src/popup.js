@@ -99,7 +99,13 @@ function showNotice(title, body) {
 
 function renderNotice() {
   var a = state.agg;
-  if (!state.connected || !a) {
+
+  // While nothing is attached, the boot path and blocked() own the notice:
+  // whatever they put there is recovery advice, and a poll that comes back
+  // with "still nothing" has no better information to replace it with.
+  if (!state.connected) return;
+
+  if (!a) {
     noticeEl.hidden = true;
     return;
   }

@@ -629,6 +629,7 @@ function loadPopup(options = {}) {
     els[id] = fakeEl(id);
   }
   els.app.classList.add('is-booting');
+  els.notice.hidden = true;
 
   const doc = {
     getElementById: (id) => els[id],
@@ -711,6 +712,25 @@ function answering(snapshot) {
   is(popup.els.value.textContent, '200', 'a stale poll does not roll the slider back');
   ok(popup.messages.some((m) => m.t === 'set' && m.gain === 2),
     'and the dragged level was sent to the background');
+}
+
+{
+  // A page that was open before install. The boot path explains how to fix
+  // it; the 800ms poll answering "still nothing" must not erase the advice.
+  const snapshot = {
+    connected: false, gain: 1, muted: false, origin: null, agg: null,
+    opts: { remember: true }
+  };
+  const popup = loadPopup({ handle: answering(snapshot) });
+  await settle();
+  popup.flush();
+
+  is(popup.els.notice.hidden, false, 'an unattached page shows the reload advice');
+  is(popup.els.notice.children[0].textContent, 'Not attached yet', 'under the right heading');
+
+  popup.flush();
+  await settle();
+  is(popup.els.notice.hidden, false, 'the poll leaves the advice up while still detached');
 }
 
 {
