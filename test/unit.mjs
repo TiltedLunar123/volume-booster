@@ -1000,6 +1000,46 @@ describe('background.js origin integrity');
 }
 
 /* ==================================================================== *
+ * The restore window. Between the background waking and the saved level
+ * being read back, the tab state briefly holds the default. Frames that
+ * reconnect inside that window must not be handed the default as if it
+ * were the answer.
+ * ==================================================================== */
+
+describe('background.js restore window');
+
+{
+  // After an eviction every frame reconnects at once, in no particular
+  // order. A boosted iframe player whose hello wins the race used to be
+  // told 100%, audibly dipping until the top frame's restore broadcast.
+  const bg = loadBackground();
+  bg.store.sites = { 'https://player.example': { g: 3, m: false, t: 1 } };
+
+  const sub = bg.openFrame(18, 'https://embed.other', false, { gain: 3 });
+  bg.openFrame(18, 'https://player.example', true, { gain: 3 });
+  await settle();
+
+  ok(!sub.sent.some((m) => m.t === 'set' && m.gain === 1),
+    'a subframe reconnecting first is never told to drop to 100%');
+  is(sub.sent[sub.sent.length - 1].gain, 3, 'it gets the restored level instead');
+}
+
+{
+  // The same dip through the other door: the top frame reconnects first,
+  // and the subframe's hello lands while the storage read is in flight.
+  const bg = loadBackground();
+  bg.store.sites = { 'https://player.example': { g: 3, m: false, t: 1 } };
+
+  bg.openFrame(19, 'https://player.example', true, { gain: 3 });
+  const sub = bg.openFrame(19, 'https://embed.other', false, { gain: 3 });
+  await settle();
+
+  ok(!sub.sent.some((m) => m.t === 'set' && m.gain === 1),
+    'a subframe arriving during the storage read is not told 100% either');
+  is(sub.sent[sub.sent.length - 1].gain, 3, 'the restore broadcast reaches it');
+}
+
+/* ==================================================================== *
  * Remembering is a promise about storage, made both ways: save when it is
  * on, and keep hands off the disk when it is off. Neither direction had a
  * test, so either could regress without a gate going red.

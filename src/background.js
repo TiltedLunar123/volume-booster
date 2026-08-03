@@ -100,7 +100,7 @@ function stateFor(tabId) {
     // can tell whether it is about to overwrite a newer choice. dirty marks a
     // change that could not be saved yet because no connected top frame could
     // vouch for the origin.
-    st = { gain: 1, muted: false, origin: null, epoch: 0, dirty: false, frames: new Map() };
+    st = { gain: 1, muted: false, origin: null, epoch: 0, dirty: false, adopting: false, frames: new Map() };
     tabs.set(tabId, st);
   }
   return st;
@@ -227,8 +227,12 @@ api.runtime.onConnect.addListener(function (port) {
     frame.top = !!msg.top;
 
     if (!msg.top) {
-      // A subframe just needs whatever the tab is currently set to.
-      pushTo(port, cur);
+      // A subframe just needs whatever the tab is currently set to. Unless
+      // nothing is known yet: before the top frame's hello, and while its
+      // saved level is still being read back, the state holds a default that
+      // would audibly dip a boosted player. The restore broadcast is coming,
+      // so silence beats a wrong answer.
+      if (cur.origin !== null && !cur.adopting) pushTo(port, cur);
       return;
     }
 
@@ -248,10 +252,12 @@ api.runtime.onConnect.addListener(function (port) {
     // The top frame moved to a different site. Adopt that site's saved level.
     var fresh = cur.origin === null;
     cur.origin = msg.origin;
+    cur.adopting = true;
     var epoch = cur.epoch;
     loadSite(msg.origin).then(function (saved) {
       var latest = tabs.get(tabId);
       if (!latest || latest.origin !== msg.origin) return;
+      latest.adopting = false;
 
       // Reading storage takes long enough for the user to have moved the
       // slider in the meantime, and what they just chose beats what was on
