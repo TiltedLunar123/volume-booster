@@ -8,6 +8,24 @@ Most of it transfers to AMO as well. AMO additionally needs the data collection
 declaration, which is already in `src/manifest.firefox.json` as
 `browser_specific_settings.gecko.data_collection_permissions`.
 
+## No third party site names in the public description
+
+The Chrome Web Store rejected the 1.0.2 listing on 2026-07-31 for keyword spam,
+citing one line: the "WHERE IT WORKS" list of "YouTube, YouTube Music, Twitch,
+SoundCloud, Bandcamp, Vimeo". Naming sites the extension merely happens to work
+on reads as keyword stuffing to a reviewer, however true it is, because none of
+those names describe the extension itself.
+
+So the public description names no third party service at all, and the categories
+carry the meaning instead: "video sites, music and podcast players, live
+streams". The DRM limitation is stated the same way, as major paid video and
+music subscriptions rather than a list of four brands. The point survives, since
+a reader who is subscribed to one knows they are.
+
+The names still belong in the fields only a reviewer sees, where they are
+instructions rather than metadata: the test instructions below, and
+`reviewer-notes-1.0.2.txt`. Keep them there and out of the description.
+
 ## Store listing
 
 | Field | Value |

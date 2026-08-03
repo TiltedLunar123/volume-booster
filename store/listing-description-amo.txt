@@ -4,7 +4,7 @@ WHAT YOU GET
 
 0% to 600% on a single slider, with a notch at 100% so normal is easy to find again. It turns audio down as well as up.
 
-Your level is remembered per site. Set YouTube to 200% once and it's still 200% next week.
+Your level is remembered per site. Set a site to 200% once and it's still 200% next week.
 
 A limiter kicks in above 100%, so loud gets louder instead of turning to crackle.
 
@@ -20,13 +20,13 @@ Each tab keeps its own level, so two tabs on the same site don't fight each othe
 
 WHERE IT WORKS
 
-Most of the web: YouTube, YouTube Music, Twitch, SoundCloud, Bandcamp, Vimeo, podcast players, news sites, and plain audio and video on any page. Embedded players work too, because every frame is handled on its own.
+Most of the web. Video sites, music and podcast players, live streams, news sites, and plain audio and video on any page. Embedded players work too, because every frame is handled on its own.
 
 WHERE IT DOESN'T
 
 Worth knowing before you install, since plenty of listings in this category skip past it.
 
-Streaming services that use DRM won't boost: Netflix, Spotify, Amazon Prime Video, Apple Music, anything in that family. Their audio is encrypted and no extension is allowed near it, though that's a browser rule rather than something anyone can code around.
+Anything protected by DRM won't boost, which covers the major paid video and music subscriptions. Their audio is encrypted and no extension is allowed near it, though that's a browser rule rather than something anyone can code around.
 
 A few sites stream their audio from a separate domain without the header that permits access to it. Firefox blocks that as well, so on those pages the add-on leaves the sound alone rather than breaking it.
 
