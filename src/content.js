@@ -569,5 +569,19 @@
   });
 
   scan(true);
-  openPort();
+
+  /*
+   * A prerendered document (omnibox preloads, speculation rules) is a second
+   * top-level frame in the same tab. If it says hello while it is still
+   * invisible, the background reads that as a navigation: it adopts this
+   * document's origin and pushes its level over the page the user is actually
+   * looking at. So the announcement waits until the browser shows this one.
+   */
+  if (document.prerendering) {
+    document.addEventListener('prerenderingchange', function () {
+      openPort();
+    }, { once: true });
+  } else {
+    openPort();
+  }
 })();

@@ -344,6 +344,24 @@ function loadContent(options = {}) {
 }
 
 /* ==================================================================== *
+ * Prerendering. Chrome renders omnibox predictions and speculation-rules
+ * targets as invisible top-level documents inside the live tab. One of
+ * those saying hello reads to the background exactly like a navigation,
+ * which resets the page the user is actually looking at.
+ * ==================================================================== */
+
+describe('content.js prerendering');
+
+{
+  const vb = loadContent({ prerendering: true });
+  is(vb.ports.length, 0, 'an invisible prerendered document does not announce itself');
+
+  vb.docFire('prerenderingchange');
+  is(vb.ports.length, 1, 'being shown is what opens the port');
+  is(vb.ports[0].sent[0].t, 'hello', 'and the now-visible page announces normally');
+}
+
+/* ==================================================================== *
  * The applied level.
  *
  * Everything above proves messages arrive. None of it proved the audio
