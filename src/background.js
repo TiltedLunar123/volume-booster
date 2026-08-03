@@ -135,6 +135,7 @@ function aggregate(st) {
     silenced: 0,
     protectedCount: 0,
     taintedCount: 0,
+    busyCount: 0,
     suspended: false
   };
   st.frames.forEach(function (frame) {
@@ -145,6 +146,7 @@ function aggregate(st) {
     out.silenced += s.silenced || 0;
     out.protectedCount += s.protectedCount || 0;
     out.taintedCount += s.taintedCount || 0;
+    out.busyCount += s.busyCount || 0;
     if (s.suspended) out.suspended = true;
   });
   return out;

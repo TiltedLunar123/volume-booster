@@ -80,6 +80,7 @@ function statusText() {
   if (a.silenced > 0) return 'No signal, reload page';
   if (a.boosted === 0 && a.protectedCount > 0) return 'Protected audio';
   if (a.boosted === 0 && a.taintedCount > 0) return 'Boost blocked';
+  if (a.boosted === 0 && a.busyCount > 0) return 'Blocked by another extension';
   if (a.suspended) return 'Press play to apply';
   if (a.boosted > 0) {
     return a.boosted === 1 ? '1 source boosted' : a.boosted + ' sources boosted';
@@ -127,6 +128,13 @@ function renderNotice() {
     showNotice('Boost unavailable',
       'This page loads its audio from another domain without the header that ' +
       'permits boosting. Lowering the volume still works.');
+    return;
+  }
+  if (a.busyCount > 0) {
+    showNotice('Another extension got here first',
+      'Only one extension at a time can process the audio on a page, and a ' +
+      'different one is already attached here. Disable it, or use it instead. ' +
+      'Lowering the volume still works.');
     return;
   }
   noticeEl.hidden = true;

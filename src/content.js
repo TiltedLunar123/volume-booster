@@ -364,7 +364,7 @@
     var media = 0;
     var boosted = 0;
     var silenced = 0;
-    var reasons = { protected: 0, tainted: 0 };
+    var reasons = { protected: 0, tainted: 0, busy: 0 };
 
     tracked.forEach(function (el) {
       media++;
@@ -372,6 +372,14 @@
       if (entry) {
         boosted++;
         if (entry.silent) silenced++;
+        return;
+      }
+      // Refused by another AudioContext, which is almost always another
+      // volume extension. The element classifies as routable, so without
+      // this bucket it would vanish from every count and the popup would
+      // report a healthy page the slider does nothing on.
+      if (permanentlyFailed.has(el)) {
+        reasons.busy++;
         return;
       }
       var kind = classify(el);
@@ -385,6 +393,7 @@
       silenced: silenced,
       protectedCount: reasons.protected,
       taintedCount: reasons.tainted,
+      busyCount: reasons.busy,
       suspended: !!(ctx && ctx.state === 'suspended'),
       origin: location.origin,
       top: window.top === window
@@ -403,7 +412,8 @@
     if (!port) return;
     var s = status();
     var key = s.media + '/' + s.boosted + '/' + s.protectedCount + '/' +
-      s.taintedCount + '/' + s.silenced + '/' + (s.suspended ? 1 : 0);
+      s.taintedCount + '/' + s.busyCount + '/' + s.silenced + '/' +
+      (s.suspended ? 1 : 0);
     if (key === lastStatusKey) return;
     lastStatusKey = key;
     try {

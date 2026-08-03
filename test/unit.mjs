@@ -344,6 +344,26 @@ function loadContent(options = {}) {
 }
 
 /* ==================================================================== *
+ * Contested elements. Only one AudioContext can ever own a media element,
+ * and other volume extensions fight for the same ones. Losing that race
+ * is fine; not saying so is not, because the slider then does nothing on
+ * a page the popup reports as healthy.
+ * ==================================================================== */
+
+describe('content.js contested elements');
+
+{
+  const vb = loadContent({ failSourceOnce: true });
+  vb.ports[0].receive({ t: 'set', gain: 2, muted: false, limiter: true });
+  vb.flush();
+
+  const sent = vb.ports[0].sent.filter((m) => m.t === 'status');
+  const s = sent[sent.length - 1].status;
+  is(s.boosted, 0, 'an element another extension owns is not counted as boosted');
+  is(s.busyCount, 1, 'it is reported as contested instead');
+}
+
+/* ==================================================================== *
  * Orphaning. An extension update or removal invalidates every running
  * content script: runtime.id disappears and no port can ever come back.
  * Whatever such a script leaves applied is applied until the page reloads,
@@ -718,6 +738,21 @@ function answering(snapshot) {
   is(popup.els.notice.children[0].textContent, 'Protected audio', 'with the right heading');
 }
 
+{
+  const snapshot = {
+    connected: true, gain: 2, muted: false, origin: 'https://contested.example',
+    agg: { media: 1, boosted: 0, silenced: 0, protectedCount: 0, taintedCount: 0, busyCount: 1, suspended: false },
+    opts: { remember: true }
+  };
+  const popup = loadPopup({ handle: answering(snapshot) });
+  await settle();
+  popup.flush();
+
+  is(popup.els.status.textContent, 'Blocked by another extension',
+    'losing the element to another extension is said, not hidden');
+  is(popup.els.notice.hidden, false, 'and explained in the notice');
+}
+
 /* ==================================================================== *
  * Background: storage, badge, and the port state machine
  * ==================================================================== */
@@ -831,6 +866,15 @@ function loadBackground(options = {}) {
   const push = frame.sent[frame.sent.length - 1];
   is(push.gain, 3, 'a returning visit restores the saved level without the popup opening');
   is(bg.badges[2], '300%', 'the badge is restored too');
+}
+
+{
+  const bg = loadBackground();
+  const frame = bg.openFrame(20, 'https://contested.example');
+  await settle();
+  frame.port.receive({ t: 'status', status: { media: 1, boosted: 0, busyCount: 1 } });
+  const snap = await bg.send({ t: 'get', tabId: 20 });
+  is(snap.agg.busyCount, 1, 'contested elements survive aggregation to the popup');
 }
 
 {
