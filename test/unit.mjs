@@ -38,6 +38,9 @@ function ok(condition, label) {
   is(!!condition, true, label);
 }
 
+/** Lets queued promise chains resolve before asserting on their effects. */
+const settle = () => new Promise((r) => setTimeout(r, 5));
+
 /** Pulls `function name(...) { ... }` out of a source file by brace matching. */
 function extract(source, name) {
   const start = source.indexOf(`function ${name}(`);
@@ -114,11 +117,17 @@ describe('content.js back/forward cache');
 
 function loadContent(options = {}) {
   const windowEvents = {};
+  const docEvents = {};
   const ports = [];
   const contexts = [];
   const timers = [];
+  const intervals = [];
+  const observers = [];
+  const signal = { level: 0 };
   let lastErrorReads = 0;
   let connectCalls = 0;
+  let sourceCalls = 0;
+  let runtimeId = 'test';
 
   function node() {
     return { connect() {}, disconnect() {} };
@@ -130,6 +139,7 @@ function loadContent(options = {}) {
     this.destination = node();
     this.closed = false;
     this.resumes = 0;
+    this.gains = [];
     contexts.push(this);
   }
   FakeAudioContext.prototype.resume = function () {
@@ -142,12 +152,32 @@ function loadContent(options = {}) {
     this.state = 'closed';
     return Promise.resolve();
   };
-  FakeAudioContext.prototype.createMediaElementSource = node;
+  FakeAudioContext.prototype.createMediaElementSource = function () {
+    // Another AudioContext already owning the element is a real failure mode,
+    // and the only signal is this exact throw.
+    if (options.failSourceOnce && ++sourceCalls === 1) {
+      throw new Error('InvalidStateError: already connected');
+    }
+    return node();
+  };
   FakeAudioContext.prototype.createAnalyser = function () {
-    return Object.assign(node(), { fftSize: 256, getFloatTimeDomainData() {} });
+    return Object.assign(node(), {
+      fftSize: 256,
+      // The silence detector reads peaks from here. `signal.level` is what the
+      // fake element is "playing", so a test can cut and restore the audio.
+      getFloatTimeDomainData(buffer) { buffer[0] = signal.level; }
+    });
   };
   FakeAudioContext.prototype.createGain = function () {
-    return Object.assign(node(), { gain: { value: 1, setTargetAtTime() {} } });
+    const g = Object.assign(node(), {
+      gain: {
+        value: 1,
+        targets: [],
+        setTargetAtTime(v) { this.value = v; this.targets.push(v); }
+      }
+    });
+    this.gains.push(g);
+    return g;
   };
   FakeAudioContext.prototype.createDynamicsCompressor = function () {
     return Object.assign(node(), {
@@ -156,19 +186,23 @@ function loadContent(options = {}) {
   };
 
   function HTMLMediaElement() {}
-  const media = Object.assign(new HTMLMediaElement(), {
-    currentSrc: 'https://example.com/a.mp3',
-    volume: 1,
-    muted: false,
-    paused: false,
-    readyState: 4,
-    isConnected: true,
-    addEventListener() {}
-  });
+  function makeMedia(props) {
+    return Object.assign(new HTMLMediaElement(), {
+      currentSrc: 'https://example.com/a.mp3',
+      volume: 1,
+      muted: false,
+      paused: false,
+      readyState: 4,
+      isConnected: true,
+      addEventListener() {}
+    }, props);
+  }
+  const media = makeMedia();
+  const mediaList = [media];
 
   const chrome = {
     runtime: {
-      id: 'test',
+      get id() { return runtimeId; },
       // The property the browser sets when it closes a port itself. Reading it
       // is the whole contract, so the test counts reads.
       get lastError() { lastErrorReads++; return undefined; },
@@ -201,12 +235,17 @@ function loadContent(options = {}) {
 
   const doc = {
     documentElement: {},
-    addEventListener() {},
-    querySelectorAll: (sel) => (sel === 'audio,video' ? [media] : [])
+    addEventListener(type, fn) {
+      (docEvents[type] = docEvents[type] || []).push(fn);
+    },
+    querySelectorAll: (sel) => (sel === 'audio,video' ? mediaList.slice() : [])
   };
+  if (options.prerendering) doc.prerendering = true;
 
-  function FakeMutationObserver() {
+  function FakeMutationObserver(cb) {
+    observers.push(cb);
     this.observe = function () {};
+    this.disconnect = function () {};
   }
 
   new Function(
@@ -217,15 +256,25 @@ function loadContent(options = {}) {
     win, doc,
     { origin: 'https://example.com', href: 'https://example.com/watch' },
     chrome, HTMLMediaElement, FakeMutationObserver,
-    () => 0,
+    (fn) => { intervals.push(fn); return 99; },
     (fn) => timers.push(fn)
   );
 
   return {
     ports,
     contexts,
+    media,
+    signal,
+    makeMedia,
+    addMedia: (props) => { const el = makeMedia(props); mediaList.push(el); return el; },
     lastErrorReads: () => lastErrorReads,
+    setRuntimeId: (v) => { runtimeId = v; },
     fire: (type, event) => (windowEvents[type] || []).forEach((fn) => fn(event)),
+    docFire: (type, event) => (docEvents[type] || []).forEach((fn) => fn(event)),
+    /** One tick of the 2.5s discovery/health sweep. */
+    sweep: () => intervals.forEach((fn) => fn()),
+    /** Fires the MutationObserver callbacks, as if the DOM changed. */
+    mutate: () => observers.forEach((cb) => cb()),
     /** Runs whatever the script has queued, so retries are deterministic. */
     flush: () => timers.splice(0).forEach((fn) => fn())
   };
@@ -295,31 +344,323 @@ function loadContent(options = {}) {
 }
 
 /* ==================================================================== *
+ * The applied level.
+ *
+ * Everything above proves messages arrive. None of it proved the audio
+ * graph actually moves: a build that parsed the message and then dropped it
+ * on the floor passed every test. These read the gain node itself.
+ * ==================================================================== */
+
+describe('content.js applied gain');
+
+{
+  const vb = loadContent();
+  vb.ports[0].receive({ t: 'set', gain: 2, muted: false, limiter: true });
+  const gain = vb.contexts[0].gains[0].gain;
+  is(gain.value, 2, 'the requested level lands on the gain node');
+
+  vb.ports[0].receive({ t: 'set', gain: 2, muted: true, limiter: true });
+  is(gain.value, 0, 'muting drives the gain to zero, whatever the level says');
+
+  vb.ports[0].receive({ t: 'set', gain: 2, muted: false, limiter: true });
+  is(gain.value, 2, 'unmuting restores the level, not 100%');
+
+  vb.ports[0].receive({ t: 'set', gain: 9, muted: false, limiter: true });
+  is(gain.value, 6, 'a level beyond the ceiling is clamped, not applied');
+
+  vb.ports[0].receive({ t: 'set', gain: 0.5, muted: false, limiter: true });
+  is(gain.value, 0.5, 'reduction below 100% reaches the node too');
+}
+
+/* ==================================================================== *
+ * Discovery.
+ *
+ * Three separate paths find media the initial scan missed: the capture
+ * listeners on the document, the MutationObserver, and the periodic sweep.
+ * A page whose player appears late depends on whichever fires first.
+ * ==================================================================== */
+
+describe('content.js discovery');
+
+{
+  const vb = loadContent();
+  vb.ports[0].receive({ t: 'set', gain: 2, muted: false, limiter: true });
+  is(vb.contexts[0].gains.length, 1, 'boot found the element that was already there');
+
+  // A media element created after load announces itself by playing.
+  const late = vb.makeMedia();
+  vb.docFire('play', { type: 'play', target: late });
+  is(vb.contexts[0].gains.length, 2, 'an element discovered by its play event is routed');
+  is(vb.contexts[0].gains[1].gain.value, 2, 'and it gets the level already chosen for the tab');
+
+  // One inserted silently, found by the MutationObserver.
+  vb.addMedia();
+  vb.mutate();
+  vb.flush();
+  is(vb.contexts[0].gains.length, 3, 'an element found via the observer is routed');
+
+  // And one the observer missed, caught by the periodic sweep.
+  vb.addMedia();
+  vb.sweep();
+  is(vb.contexts[0].gains.length, 4, 'an element found by the sweep is routed');
+}
+
+/* ==================================================================== *
+ * The silence detector.
+ *
+ * A same-origin URL that redirects cross-origin wires in cleanly and then
+ * emits zeroes forever. The only mitigation is noticing and telling the
+ * user to reload, which is worthless if the noticing never runs.
+ * ==================================================================== */
+
+describe('content.js silence detector');
+
+{
+  const vb = loadContent();
+  vb.ports[0].receive({ t: 'set', gain: 2, muted: false, limiter: true });
+  vb.flush();
+
+  vb.signal.level = 0.5;
+  vb.sweep();
+  vb.flush();
+  let sent = vb.ports[0].sent.filter((m) => m.t === 'status');
+  is(sent[sent.length - 1].status.silenced, 0, 'audible playback is not flagged');
+
+  vb.signal.level = 0;
+  vb.sweep();
+  vb.sweep();
+  vb.flush();
+  sent = vb.ports[0].sent.filter((m) => m.t === 'status');
+  is(sent[sent.length - 1].status.silenced, 0, 'two silent checks are not yet a verdict');
+
+  vb.sweep();
+  vb.flush();
+  sent = vb.ports[0].sent.filter((m) => m.t === 'status');
+  is(sent[sent.length - 1].status.silenced, 1, 'three consecutive silent checks flag the element');
+
+  vb.signal.level = 0.5;
+  vb.sweep();
+  vb.flush();
+  sent = vb.ports[0].sent.filter((m) => m.t === 'status');
+  is(sent[sent.length - 1].status.silenced, 0, 'sound coming back clears the flag');
+}
+
+/* ==================================================================== *
  * Slider mapping
  * ==================================================================== */
 
 describe('popup.js slider mapping');
 
+/** Reads `var NAME = <number>` out of a shipped source file. */
+function constant(source, name) {
+  const hit = source.match(new RegExp(`var ${name} = ([0-9.]+)`));
+  if (!hit) throw new Error(`constant ${name} not found`);
+  return parseFloat(hit[1]);
+}
+
+// The mapping is tested with the constants the product actually ships, not a
+// copy of them: a copy would keep passing after the real ones drifted.
+const PIVOT = constant(popupSource, 'PIVOT');
+const RAW_MAX = constant(popupSource, 'RAW_MAX');
+const MAX_GAIN = constant(popupSource, 'MAX_GAIN');
+
+is(constant(contentSource, 'MAX_GAIN'), MAX_GAIN,
+  'content.js clamps to the same ceiling the slider offers');
+is(constant(backgroundSource, 'MAX_GAIN'), MAX_GAIN,
+  'background.js clamps to the same ceiling the slider offers');
+
+const popupHtml = fs.readFileSync(path.join(SRC, 'popup.html'), 'utf8');
+const rangeTag = popupHtml.match(/<input id="range"[^>]*>/s)[0];
+is(parseInt(rangeTag.match(/max="(\d+)"/)[1], 10), RAW_MAX,
+  'the html track length matches RAW_MAX');
+is(parseInt(rangeTag.match(/value="(\d+)"/)[1], 10), PIVOT,
+  'the html initial position is the 100% detent');
+
 const mapping = new Function(
-  `var PIVOT = 400, RAW_MAX = 1000, MAX_GAIN = 6;
+  `var PIVOT = ${PIVOT}, RAW_MAX = ${RAW_MAX}, MAX_GAIN = ${MAX_GAIN};
    ${extract(popupSource, 'rawToGain')}
    ${extract(popupSource, 'gainToRaw')}
    return { rawToGain: rawToGain, gainToRaw: gainToRaw };`
 )();
 
 is(mapping.rawToGain(0), 0, 'raw 0 is silence');
-is(mapping.rawToGain(400), 1, 'the detent at raw 400 is exactly 100%');
-is(mapping.rawToGain(1000), 6, 'raw 1000 is 600%');
-is(mapping.gainToRaw(1), 400, '100% maps back to the detent');
-is(mapping.gainToRaw(6), 1000, '600% maps to the end of the track');
+is(mapping.rawToGain(PIVOT), 1, `the detent at raw ${PIVOT} is exactly 100%`);
+is(mapping.rawToGain(RAW_MAX), MAX_GAIN, `raw ${RAW_MAX} is ${MAX_GAIN * 100}%`);
+is(mapping.gainToRaw(1), PIVOT, '100% maps back to the detent');
+is(mapping.gainToRaw(MAX_GAIN), RAW_MAX, `${MAX_GAIN * 100}% maps to the end of the track`);
 
-for (const gain of [0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 6]) {
+for (const gain of [0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, MAX_GAIN]) {
   const round = mapping.rawToGain(mapping.gainToRaw(gain));
   ok(Math.abs(round - gain) < 0.005, `${gain} survives a round trip (got ${round.toFixed(4)})`);
 }
 
-ok(mapping.gainToRaw(1) / 1000 === 0.4,
+ok(mapping.gainToRaw(1) / RAW_MAX === 0.4,
   'the 100% detent sits at 40% of the track, matching the CSS marker');
+
+/* ==================================================================== *
+ * The popup, booted for real.
+ *
+ * Everything the popup promises happens in popup.js, and none of it ran
+ * under test before this: the userTouched guard, the status line, the
+ * notices, and the blocked-page path all regress silently without this.
+ * ==================================================================== */
+
+describe('popup.js');
+
+function loadPopup(options = {}) {
+  const timers = [];
+  const messages = [];
+  const els = {};
+
+  function fakeEl(id) {
+    const listeners = {};
+    const set = new Set();
+    return {
+      id,
+      _text: '',
+      get textContent() { return this._text; },
+      set textContent(v) { this._text = v; if (v === '') this.children = []; },
+      value: '',
+      checked: false,
+      hidden: false,
+      style: {},
+      children: [],
+      attrs: {},
+      classList: {
+        add(c) { set.add(c); },
+        remove(c) { set.delete(c); },
+        toggle(c, force) { force ? set.add(c) : set.delete(c); },
+        contains(c) { return set.has(c); }
+      },
+      setAttribute(k, v) { this.attrs[k] = String(v); },
+      getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
+      addEventListener(t, fn) { (listeners[t] = listeners[t] || []).push(fn); },
+      fire(t, ev) { (listeners[t] || []).forEach((fn) => fn(ev || {})); },
+      appendChild(c) { this.children.push(c); },
+      querySelectorAll() { return this.id === 'presets' ? presetButtons : []; },
+      closest() { return this; }
+    };
+  }
+
+  const presetButtons = ['1', '1.5', '2', '3', '5'].map((g) => {
+    const b = fakeEl('preset-' + g);
+    b.setAttribute('data-gain', g);
+    return b;
+  });
+
+  for (const id of ['app', 'host', 'value', 'readout', 'grad', 'range', 'presets',
+    'mute', 'muteLabel', 'waves', 'cross', 'status', 'remember', 'resetAll', 'notice']) {
+    els[id] = fakeEl(id);
+  }
+  els.app.classList.add('is-booting');
+
+  const doc = {
+    getElementById: (id) => els[id],
+    createElement: (tag) => fakeEl(tag),
+    createTextNode: (text) => ({ text })
+  };
+  const win = { addEventListener() {} };
+
+  const chrome = {
+    runtime: {
+      sendMessage(msg) {
+        messages.push(msg);
+        return Promise.resolve(options.handle ? options.handle(msg) : null);
+      }
+    },
+    tabs: {
+      query: () => Promise.resolve([options.tab || { id: 1, url: 'https://a.example/watch' }])
+    },
+    storage: {
+      local: { get: () => Promise.resolve({ sites: options.stored || {} }) }
+    }
+  };
+
+  new Function(
+    'window', 'document', 'chrome', 'setTimeout',
+    popupSource
+  )(win, doc, chrome, (fn) => { timers.push(fn); return timers.length; });
+
+  return {
+    els,
+    messages,
+    presetButtons,
+    flush: () => timers.splice(0).forEach((fn) => fn())
+  };
+}
+
+/** A background that answers every popup message from one snapshot. */
+function answering(snapshot) {
+  return (msg) => {
+    if (msg.t === 'inject') return snapshot.connected ? { ok: true, state: snapshot } : { ok: false };
+    return snapshot;
+  };
+}
+
+{
+  const snapshot = {
+    connected: true, gain: 3, muted: false, origin: 'https://a.example',
+    agg: { media: 1, boosted: 1, silenced: 0, protectedCount: 0, taintedCount: 0, suspended: false },
+    opts: { remember: true }
+  };
+  const popup = loadPopup({ handle: answering(snapshot) });
+  await settle();
+  popup.flush();
+
+  is(popup.els.value.textContent, '300', 'the saved level is painted');
+  is(popup.els.host.textContent, 'a.example', 'the host is painted');
+  is(popup.els.status.textContent, '1 source boosted', 'the status counts what is boosted');
+  is(popup.els.notice.hidden, true, 'a healthy page shows no notice');
+}
+
+{
+  // The bug this repo already shipped a fix for, popup side: a stale read
+  // must never overwrite a level the user is in the middle of setting.
+  const snapshot = {
+    connected: true, gain: 1, muted: false, origin: 'https://a.example',
+    agg: { media: 1, boosted: 1, silenced: 0, protectedCount: 0, taintedCount: 0, suspended: false },
+    opts: { remember: true }
+  };
+  const popup = loadPopup({ handle: answering(snapshot) });
+  await settle();
+  popup.flush();
+
+  popup.els.range.value = '520';
+  popup.els.range.fire('input');
+  is(popup.els.value.textContent, '200', 'dragging paints immediately');
+
+  // The 800ms poll answers with the stale pre-drag level.
+  popup.flush();
+  await settle();
+  is(popup.els.value.textContent, '200', 'a stale poll does not roll the slider back');
+  ok(popup.messages.some((m) => m.t === 'set' && m.gain === 2),
+    'and the dragged level was sent to the background');
+}
+
+{
+  const popup = loadPopup({ tab: { id: 2, url: 'chrome://extensions/' } });
+  await settle();
+  popup.flush();
+
+  ok(popup.els.app.classList.contains('is-blocked'), 'an internal page blocks the popup');
+  is(popup.els.status.textContent, 'Not available here', 'and says so in the status line');
+  is(popup.els.notice.hidden, false, 'with an explanation');
+}
+
+{
+  const snapshot = {
+    connected: true, gain: 2, muted: false, origin: 'https://drm.example',
+    agg: { media: 1, boosted: 0, silenced: 0, protectedCount: 1, taintedCount: 0, suspended: false },
+    opts: { remember: true }
+  };
+  const popup = loadPopup({ handle: answering(snapshot) });
+  await settle();
+  popup.flush();
+
+  is(popup.els.status.textContent, 'Protected audio', 'DRM is named in the status line');
+  is(popup.els.notice.hidden, false, 'and explained in the notice');
+  is(popup.els.notice.children[0].textContent, 'Protected audio', 'with the right heading');
+}
 
 /* ==================================================================== *
  * Background: storage, badge, and the port state machine
@@ -327,10 +668,11 @@ ok(mapping.gainToRaw(1) / 1000 === 0.4,
 
 describe('background.js');
 
-function loadBackground() {
+function loadBackground(options = {}) {
   const store = {};
   const badges = {};
   const listeners = {};
+  const injections = [];
   let lastErrorReads = 0;
 
   const api = {
@@ -356,7 +698,14 @@ function loadBackground() {
       setBadgeBackgroundColor: () => {},
       setBadgeTextColor: () => {}
     },
-    scripting: { executeScript: () => Promise.resolve([]) }
+    scripting: {
+      executeScript: (spec) => {
+        injections.push(spec);
+        return options.injectFails
+          ? Promise.reject(new Error('cannot access the page'))
+          : Promise.resolve([]);
+      }
+    }
   };
 
   new Function('browser', backgroundSource)(api);
@@ -388,10 +737,11 @@ function loadBackground() {
     listeners.message(msg, {}, resolve);
   });
 
-  return { store, badges, listeners, openFrame, send, lastErrorReads: () => lastErrorReads };
+  return {
+    store, badges, listeners, openFrame, send, injections,
+    lastErrorReads: () => lastErrorReads
+  };
 }
-
-const settle = () => new Promise((r) => setTimeout(r, 5));
 
 {
   const bg = loadBackground();
@@ -565,6 +915,69 @@ const settle = () => new Promise((r) => setTimeout(r, 5));
   bg.listeners.command('boost-reset');
   await settle();
   is(frame.sent[frame.sent.length - 1].gain, 1, 'the keyboard shortcut resets');
+}
+
+/* ==================================================================== *
+ * Remembering is a promise about storage, made both ways: save when it is
+ * on, and keep hands off the disk when it is off. Neither direction had a
+ * test, so either could regress without a gate going red.
+ * ==================================================================== */
+
+describe('background.js remember and forget');
+
+{
+  const bg = loadBackground();
+  bg.openFrame(11, 'https://quiet.example');
+  await settle();
+
+  await bg.send({ t: 'opts', tabId: 11, patch: { remember: false } });
+  await bg.send({ t: 'set', tabId: 11, gain: 2, muted: false });
+  await settle();
+
+  ok(!(bg.store.sites && bg.store.sites['https://quiet.example']),
+    'with remembering off, a level is never written to disk');
+
+  const after = await bg.send({ t: 'get', tabId: 11 });
+  is(after.gain, 2, 'but the live tab still gets the level');
+}
+
+{
+  const bg = loadBackground();
+  bg.store.sites = {
+    'https://drop.example': { g: 3, m: false, t: 1 },
+    'https://keep.example': { g: 2, m: false, t: 2 }
+  };
+  bg.openFrame(12, 'https://drop.example');
+  await settle();
+
+  await bg.send({ t: 'forget', tabId: 12 });
+  is(bg.store.sites['https://drop.example'], undefined,
+    'forget removes the stored entry for the current site');
+  is(bg.store.sites['https://keep.example'].g, 2,
+    'and leaves every other site alone');
+}
+
+/* ==================================================================== *
+ * The inject fallback: the popup's only way to attach to a page that was
+ * open before the extension was installed.
+ * ==================================================================== */
+
+describe('background.js inject');
+
+{
+  const bg = loadBackground();
+  const res = await bg.send({ t: 'inject', tabId: 13 });
+  is(bg.injections.length, 1, 'the inject message injects');
+  is(bg.injections[0].target.tabId, 13, 'into the requested tab');
+  is(bg.injections[0].target.allFrames, true, 'across every frame');
+  is(bg.injections[0].files[0], 'content.js', 'with the real content script');
+  is(res.ok, true, 'and reports success');
+}
+
+{
+  const bg = loadBackground({ injectFails: true });
+  const res = await bg.send({ t: 'inject', tabId: 14 });
+  is(res.ok, false, 'a page the browser refuses reports failure instead of hanging');
 }
 
 /* ==================================================================== */
