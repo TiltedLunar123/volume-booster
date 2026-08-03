@@ -1,0 +1,13 @@
+The mute button now looks muted. The strike-through glyph never actually drew, so the icon read the same either way and only the label changed. It draws now.
+
+Boost levels hold steadier. Typing in the address bar could reset a boosted tab while the browser loaded a preview of the page behind the scenes. A level chosen right as the browser woke the extension back up could snap back to the old saved one. And embedded players could dip to 100% for a moment after the browser put the extension to sleep. All three hold now.
+
+Keyboard shortcuts respect the page you are on. Pressing one on a browser settings page could quietly edit the remembered level of the last real site you visited. Nothing gets written down anymore unless the page can hear it.
+
+If a different volume extension is holding a page's audio, the popup says so. Only one extension can process a page's sound, and losing that race used to look like a healthy page where the slider just did nothing.
+
+Updates let go of your tabs. Installing a new version used to leave already-open tabs stuck at their old boost until you reloaded them. They return to normal volume on their own now.
+
+On Firefox, version 127 or newer is now required. Older Firefox never granted the permission the extension needs to run on pages, so it looked installed but did nothing.
+
+No new permissions.
