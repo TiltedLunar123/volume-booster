@@ -364,6 +364,29 @@ describe('content.js contested elements');
 }
 
 /* ==================================================================== *
+ * The reduce-only fallback. Elements that cannot be routed (DRM, CORS)
+ * still honor turning down, through el.volume, and returning to 100% must
+ * hand back whatever volume the page had chosen for itself.
+ * ==================================================================== */
+
+describe('content.js reduce-only fallback');
+
+{
+  const vb = loadContent();
+  vb.media.currentSrc = 'https://cdn.other.example/a.mp3';
+  vb.media.volume = 0.8;
+
+  vb.ports[0].receive({ t: 'set', gain: 3, muted: false, limiter: true });
+  is(vb.media.volume, 1, 'boosting an unroutable element caps at the element maximum');
+
+  vb.ports[0].receive({ t: 'set', gain: 0.5, muted: false, limiter: true });
+  is(vb.media.volume, 0.5, 'reduction still works without a graph');
+
+  vb.ports[0].receive({ t: 'set', gain: 1, muted: false, limiter: true });
+  is(vb.media.volume, 0.8, 'and 100% restores the volume the page had set');
+}
+
+/* ==================================================================== *
  * Orphaning. An extension update or removal invalidates every running
  * content script: runtime.id disappears and no port can ever come back.
  * Whatever such a script leaves applied is applied until the page reloads,
