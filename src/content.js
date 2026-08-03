@@ -424,17 +424,29 @@
     lastStatusKey = '';
   }
 
+  // An extension update or removal orphans this script for good: runtime.id
+  // is gone and no port can ever come back, so whatever is applied right now
+  // is applied until the page reloads. Hand the audio back instead of leaving
+  // the page stuck loud, quiet, or silent with the slider unable to reach it.
+  function neutralize() {
+    desired = 1;
+    muted = false;
+    clearInterval(sweepTimer);
+    apply();
+  }
+
   // The background being unloaded is routine, so every failed link has to lead
   // back to another attempt. A frame that stops trying is a page the slider
   // silently does nothing on.
   function retryPort() {
-    if (!api.runtime.id || portRetries > 12) return;
+    if (!api.runtime.id) { neutralize(); return; }
+    if (portRetries > 12) return;
     portRetries++;
     setTimeout(openPort, Math.min(500 * portRetries, 5000));
   }
 
   function openPort() {
-    if (!api.runtime.id) return;
+    if (!api.runtime.id) { neutralize(); return; }
     // A live port means someone already reconnected. Restoring from the
     // back/forward cache and retrying after the worker was evicted can both
     // land here, and a second port would register this frame twice in the
@@ -526,7 +538,7 @@
     document.addEventListener('readystatechange', startObserver, { once: true });
   }
 
-  setInterval(function () {
+  var sweepTimer = setInterval(function () {
     sweepCount++;
     var deep = sweepCount % DEEP_SCAN_EVERY === 0;
     var added = scan(deep);

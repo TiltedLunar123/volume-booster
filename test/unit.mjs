@@ -344,6 +344,44 @@ function loadContent(options = {}) {
 }
 
 /* ==================================================================== *
+ * Orphaning. An extension update or removal invalidates every running
+ * content script: runtime.id disappears and no port can ever come back.
+ * Whatever such a script leaves applied is applied until the page reloads,
+ * with nothing left that can change it.
+ * ==================================================================== */
+
+describe('content.js orphaned context');
+
+{
+  const vb = loadContent();
+  vb.ports[0].receive({ t: 'set', gain: 3, muted: false, limiter: true });
+  const gain = vb.contexts[0].gains[0].gain;
+  is(gain.value, 3, 'the tab is boosted');
+
+  vb.setRuntimeId(undefined);
+  vb.ports[0].drop();
+  vb.flush();
+
+  is(gain.value, 1, 'an orphaned script hands the audio back at 100%');
+  is(vb.ports.length, 1, 'and stops trying to reconnect');
+}
+
+{
+  // The same teardown must unmute: a page stuck silent is as bad as one
+  // stuck loud.
+  const vb = loadContent();
+  vb.ports[0].receive({ t: 'set', gain: 2, muted: true, limiter: true });
+  const gain = vb.contexts[0].gains[0].gain;
+  is(gain.value, 0, 'the tab is muted');
+
+  vb.setRuntimeId(undefined);
+  vb.ports[0].drop();
+  vb.flush();
+
+  is(gain.value, 1, 'an orphaned script unmutes on its way out');
+}
+
+/* ==================================================================== *
  * Prerendering. Chrome renders omnibox predictions and speculation-rules
  * targets as invisible top-level documents inside the live tab. One of
  * those saying hello reads to the background exactly like a navigation,
