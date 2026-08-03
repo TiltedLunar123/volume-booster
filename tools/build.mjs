@@ -125,6 +125,17 @@ if (manifests.chrome && manifests.firefox) {
     fail('the Firefox manifest needs browser_specific_settings.gecko.id');
   }
 
+  // Firefox only started granting an MV3 extension's content-script origins
+  // at install time in 127. On anything older nothing prompts, the declared
+  // content script never injects, and the extension looks dead on every page
+  // until the user finds the popup. Refuse to ship a floor below that.
+  const minVersion = parseFloat(manifests.firefox.browser_specific_settings?.gecko?.strict_min_version);
+  if (!(minVersion >= 127)) {
+    fail('strict_min_version must be at least 127.0: earlier Firefox never grants MV3 content-script origins, so the extension silently does nothing');
+  } else {
+    ok(`Firefox floor ${minVersion} grants content-script origins at install`);
+  }
+
   // AMO rejects the upload outright without this, and the value has to keep
   // matching the no-data-collection claim made in the listing and PRIVACY.md.
   const collection = manifests.firefox.browser_specific_settings?.gecko?.data_collection_permissions;
