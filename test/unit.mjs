@@ -918,6 +918,70 @@ function loadBackground(options = {}) {
 }
 
 /* ==================================================================== *
+ * Origin integrity. The background can only trust st.origin while a top
+ * frame is connected to vouch for it. Outside that window a save either
+ * has to wait for the next hello or not happen at all.
+ * ==================================================================== */
+
+describe('background.js origin integrity');
+
+{
+  // The worker was just evicted, so the tab state is fresh and has no
+  // origin yet. A level chosen in that gap used to be discarded when the
+  // first hello adopted the saved level over it.
+  const bg = loadBackground();
+  bg.store.sites = { 'https://gap.example': { g: 3, m: false, t: 1 } };
+
+  await bg.send({ t: 'set', tabId: 15, gain: 5, muted: false });
+  const frame = bg.openFrame(15, 'https://gap.example', true, { gain: 3 });
+  await settle();
+
+  const after = await bg.send({ t: 'get', tabId: 15 });
+  is(after.gain, 5, 'a level set before the first hello survives it');
+  is(bg.store.sites['https://gap.example'].g, 5, 'and is saved once the origin is known');
+  is(frame.sent[frame.sent.length - 1].gain, 5, 'and reaches the frame');
+}
+
+{
+  // Navigating to a page the content script cannot run on leaves the last
+  // origin behind with nothing to correct it. A keyboard shortcut pressed
+  // there must not edit that site's stored level.
+  // Tab 1, because the command handler resolves the active tab and the
+  // harness answers every tabs.query with tab 1.
+  const bg = loadBackground();
+  const frame = bg.openFrame(1, 'https://site-a.example');
+  await settle();
+  await bg.send({ t: 'set', tabId: 1, gain: 3, muted: false });
+  await settle();
+  is(bg.store.sites['https://site-a.example'].g, 3, 'the level is saved while the site is live');
+
+  frame.port.disconnect();
+  bg.listeners.command('boost-up');
+  await settle();
+  is(bg.store.sites['https://site-a.example'].g, 3,
+    'a shortcut with no frame connected leaves the old site alone');
+}
+
+{
+  // The page is in the back/forward cache while the popup changes the tab.
+  // The save waits for the frame to come back and confirm the origin.
+  const bg = loadBackground();
+  const first = bg.openFrame(17, 'https://back.example');
+  await settle();
+  await bg.send({ t: 'set', tabId: 17, gain: 3, muted: false });
+  await settle();
+
+  first.port.disconnect();
+  await bg.send({ t: 'set', tabId: 17, gain: 4, muted: false });
+  await settle();
+
+  bg.openFrame(17, 'https://back.example', true, { gain: 3 });
+  await settle();
+  is(bg.store.sites['https://back.example'].g, 4,
+    'a parked change is saved when the same site reconnects');
+}
+
+/* ==================================================================== *
  * Remembering is a promise about storage, made both ways: save when it is
  * on, and keep hands off the disk when it is off. Neither direction had a
  * test, so either could regress without a gate going red.

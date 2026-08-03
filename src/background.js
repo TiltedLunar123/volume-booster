@@ -97,11 +97,19 @@ function stateFor(tabId) {
   var st = tabs.get(tabId);
   if (!st) {
     // epoch counts deliberate changes, so an async read that started earlier
-    // can tell whether it is about to overwrite a newer choice.
-    st = { gain: 1, muted: false, origin: null, epoch: 0, frames: new Map() };
+    // can tell whether it is about to overwrite a newer choice. dirty marks a
+    // change that could not be saved yet because no connected top frame could
+    // vouch for the origin.
+    st = { gain: 1, muted: false, origin: null, epoch: 0, dirty: false, frames: new Map() };
     tabs.set(tabId, st);
   }
   return st;
+}
+
+function topConnected(st) {
+  var found = false;
+  st.frames.forEach(function (frame) { if (frame.top) found = true; });
+  return found;
 }
 
 function pushTo(port, st) {
@@ -216,6 +224,7 @@ api.runtime.onConnect.addListener(function (port) {
 
     if (msg.t !== 'hello') return;
     frame.status = msg.status || null;
+    frame.top = !!msg.top;
 
     if (!msg.top) {
       // A subframe just needs whatever the tab is currently set to.
@@ -224,13 +233,20 @@ api.runtime.onConnect.addListener(function (port) {
     }
 
     if (cur.origin === msg.origin) {
-      // Same site, probably an in-page navigation or a re-injection.
+      // Same site, probably an in-page navigation or a re-injection. A top
+      // frame vouching for the origin again also means a change parked while
+      // nothing was connected can finally be written down.
+      if (cur.dirty) {
+        cur.dirty = false;
+        saveSite(cur.origin, cur.gain, cur.muted);
+      }
       pushTo(port, cur);
       updateBadge(tabId, cur);
       return;
     }
 
     // The top frame moved to a different site. Adopt that site's saved level.
+    var fresh = cur.origin === null;
     cur.origin = msg.origin;
     var epoch = cur.epoch;
     loadSite(msg.origin).then(function (saved) {
@@ -242,9 +258,17 @@ api.runtime.onConnect.addListener(function (port) {
       // disk when the page loaded.
       if (latest.epoch !== epoch) return;
 
-      if (saved && opts.remember) {
+      if (fresh && latest.dirty) {
+        // The user set a level in the gap between the background starting
+        // and this first hello, when no origin was known yet. The only tab
+        // that gap belongs to is this one, so their choice outranks what was
+        // on disk when the page loaded, and it can be saved now.
+        latest.dirty = false;
+        saveSite(msg.origin, latest.gain, latest.muted);
+      } else if (saved && opts.remember) {
         latest.gain = saved.gain;
         latest.muted = saved.muted;
+        latest.dirty = false;
       } else {
         // Nothing saved for this site, either because it is new or because
         // remembering is off. A frame that is already running knows what the
@@ -253,6 +277,7 @@ api.runtime.onConnect.addListener(function (port) {
         // this resets on a real navigation the way it should.
         latest.gain = typeof msg.gain === 'number' ? msg.gain : 1;
         latest.muted = !!msg.muted;
+        latest.dirty = false;
       }
 
       broadcast(latest);
@@ -276,7 +301,17 @@ function applyLevel(tabId, gain, muted) {
   st.epoch++;
   broadcast(st);
   updateBadge(tabId, st);
-  if (st.origin) saveSite(st.origin, st.gain, st.muted);
+  if (st.origin && topConnected(st)) {
+    st.dirty = false;
+    saveSite(st.origin, st.gain, st.muted);
+  } else {
+    // st.origin is a record of the last page that said hello, not of what
+    // the tab shows now. Without a connected top frame the two can disagree,
+    // most plainly on chrome:// pages where no content script ever runs, and
+    // writing through a stale origin edits some other site's level. Park the
+    // change until a hello proves where we are.
+    st.dirty = true;
+  }
   return st;
 }
 
