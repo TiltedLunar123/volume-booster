@@ -12,7 +12,7 @@ No accounts, no tracking, no network calls, no build step.
                   |100%
   [ 100 ][ 150 ][ 200 ][ 300 ][ 500 ]
   [ Mute ]                    3 sources boosted
-  Remember levels  (o)               Reset all
+  Remember levels (o)    Buy me a coffee  Reset all
 ```
 
 ## What it does
@@ -28,7 +28,9 @@ No accounts, no tracking, no network calls, no build step.
 
 ## Install
 
-Submitted to addons.mozilla.org and awaiting review. To run it now:
+**Firefox:** [Volume Booster on addons.mozilla.org](https://addons.mozilla.org/en-US/firefox/addon/volume-booster-slider/).
+
+To build it yourself, or to run it on Chrome:
 
 ```bash
 node tools/build.mjs
@@ -47,8 +49,8 @@ That writes `dist/chrome/` and `dist/firefox/` plus a zip of each.
 1. Open `about:debugging#/runtime/this-firefox`
 2. **Load Temporary Add-on**, choose `dist/firefox/manifest.json`
 
-Firefox unloads temporary add-ons when it restarts. Signing through AMO is what
-makes it permanent.
+Firefox unloads temporary add-ons when it restarts. Installing from the AMO
+listing above is what makes it permanent.
 
 ## Keyboard shortcuts
 
@@ -128,7 +130,7 @@ Full reasoning, including what was wrong in the first draft of the plan, is in
 ```bash
 node tools/make-icons.mjs     # regenerate the png icons from code
 node tools/build.mjs --check  # syntax, manifests, and the no-network check
-node test/unit.mjs            # 77 tests over classification, mapping, and state
+node test/unit.mjs            # 184 tests over classification, mapping, and state
 node test/e2e.mjs             # 19 tests in a real browser, needs Edge
 node tools/build.mjs          # build dist/ and the zips
 node tools/make-store-art.mjs # re-render the store screenshots and promo tiles
@@ -160,6 +162,12 @@ tools/        icon renderer, zip writer, packager
 test/         unit tests and the manual fixture
 PLAN.md       architecture and the decisions behind it
 ```
+
+## Support
+
+Free, and it stays free. There are no ads, no upsell, and nothing held back. If
+it earned you a coffee, [here is where to buy one](https://buymeacoffee.com/judeh1l).
+The extension mentions it once, in the footer of the popup, and never again.
 
 ## License
 
