@@ -94,6 +94,14 @@
    * Audio graph
    * ------------------------------------------------------------------ */
 
+  // The browser refuses to start an AudioContext until the document has been
+  // interacted with, and asking before then only fills the page's console with
+  // the refusal.
+  function documentActivated() {
+    var ua = navigator.userActivation;
+    return ua ? !!ua.hasBeenActive : true;
+  }
+
   function audioContext() {
     if (!ctx) {
       var Ctor = window.AudioContext || window.webkitAudioContext;
@@ -559,6 +567,12 @@
     var deep = sweepCount % DEEP_SCAN_EVERY === 0;
     var added = scan(deep);
     prune();
+    // A context that went suspended after the graph was built passes nothing
+    // at all, so the page is silent and the graph is the only route its audio
+    // has left. Waiting for a media event is not enough to get it back: audio
+    // that was already playing when the context was built never fires another
+    // one, and the click that finally unlocks the page is not a media event.
+    if (ctx && ctx.state === 'suspended' && documentActivated()) audioContext();
     checkSilence();
     if (added) apply();
     else scheduleStatus();
