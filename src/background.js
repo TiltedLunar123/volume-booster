@@ -28,8 +28,14 @@ var frameSeq = 0;
  * Storage
  * -------------------------------------------------------------------- */
 
+// Read once per worker, then kept in memory. Until that read lands `opts` holds
+// the defaults, which say remembering is on: the opposite of what a user who
+// turned it off asked for. Everything that acts on the setting waits for this.
+var optsLoaded = null;
+
 function loadOpts() {
-  return Promise.resolve(api.storage.local.get('opts')).then(function (res) {
+  if (optsLoaded) return optsLoaded;
+  optsLoaded = Promise.resolve(api.storage.local.get('opts')).then(function (res) {
     var stored = (res && res.opts) || {};
     opts = {
       remember: stored.remember !== false,
@@ -40,11 +46,38 @@ function loadOpts() {
     opts = Object.assign({}, DEFAULT_OPTS);
     return opts;
   });
+  return optsLoaded;
 }
 
 function saveOpts(patch) {
   opts = Object.assign({}, opts, patch);
   return Promise.resolve(api.storage.local.set({ opts: opts })).catch(function () {});
+}
+
+/*
+ * Every writer of the site list reads the whole thing, changes one entry, and
+ * writes it all back. Two of those overlapping means the slower one puts back a
+ * picture of the list that was already out of date, and whatever landed in
+ * between is gone: a level saved over a Reset all, or another site's entry
+ * dropped. One queue keeps them in the order they were asked for.
+ *
+ * `change` mutates the list it is handed and returns false to write nothing.
+ */
+var siteWrites = Promise.resolve();
+
+function editSites(change) {
+  siteWrites = siteWrites
+    .then(loadOpts)
+    .then(function () {
+      return Promise.resolve(api.storage.local.get('sites'));
+    })
+    .then(function (res) {
+      var sites = (res && res.sites) || {};
+      if (change(sites) === false) return;
+      return api.storage.local.set({ sites: sites });
+    })
+    .catch(function () {});
+  return siteWrites;
 }
 
 function siteKey(origin) {
@@ -68,9 +101,11 @@ function loadSite(origin) {
 
 function saveSite(origin, gain, muted) {
   var key = siteKey(origin);
-  if (!key || !opts.remember) return Promise.resolve();
-  return Promise.resolve(api.storage.local.get('sites')).then(function (res) {
-    var sites = (res && res.sites) || {};
+  if (!key) return Promise.resolve();
+  return editSites(function (sites) {
+    // Read in here rather than at the call site, so it is the setting that
+    // came off the disk and not the default that stands in until it arrives.
+    if (!opts.remember) return false;
 
     if (gain === 1 && !muted) {
       delete sites[key];
@@ -84,9 +119,7 @@ function saveSite(origin, gain, muted) {
       var drop = keys.length - MAX_SITES;
       for (var i = 0; i < drop; i++) delete sites[keys[i]];
     }
-
-    return api.storage.local.set({ sites: sites });
-  }).catch(function () {});
+  });
 }
 
 /* -------------------------------------------------------------------- *
@@ -261,7 +294,11 @@ api.runtime.onConnect.addListener(function (port) {
     cur.origin = msg.origin;
     cur.adopting = true;
     var epoch = cur.epoch;
-    loadSite(msg.origin).then(function (saved) {
+    // The stored options decide whether the saved level is used at all, so the
+    // restore waits for them rather than reading the default that stands in
+    // until they arrive.
+    Promise.all([loadSite(msg.origin), loadOpts()]).then(function (results) {
+      var saved = results[0];
       var latest = tabs.get(tabId);
       if (!latest || latest.origin !== msg.origin) return;
       latest.adopting = false;
@@ -369,27 +406,24 @@ api.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     var origin = st && st.origin;
     var key = siteKey(origin);
     if (!key) { sendResponse(snapshot(msg.tabId)); return true; }
-    Promise.resolve(api.storage.local.get('sites')).then(function (res) {
-      var sites = (res && res.sites) || {};
-      delete sites[key];
-      return api.storage.local.set({ sites: sites });
-    }).catch(function () {}).then(function () {
+    editSites(function (sites) { delete sites[key]; }).then(function () {
       sendResponse(snapshot(msg.tabId));
     });
     return true;
   }
 
   if (msg.t === 'resetAll') {
-    Promise.resolve(api.storage.local.set({ sites: {} })).catch(function () {})
-      .then(function () {
-        tabs.forEach(function (st, tabId) {
-          st.gain = 1;
-          st.muted = false;
-          broadcast(st);
-          updateBadge(tabId, st);
-        });
-        sendResponse(snapshot(msg.tabId));
+    editSites(function (sites) {
+      Object.keys(sites).forEach(function (site) { delete sites[site]; });
+    }).then(function () {
+      tabs.forEach(function (st, tabId) {
+        st.gain = 1;
+        st.muted = false;
+        broadcast(st);
+        updateBadge(tabId, st);
       });
+      sendResponse(snapshot(msg.tabId));
+    });
     return true;
   }
 
