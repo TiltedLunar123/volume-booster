@@ -413,15 +413,20 @@ api.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
 
   if (msg.t === 'resetAll') {
+    // Every open tab goes back to 100% now, not when the disk catches up, and
+    // it counts as a deliberate change like any other: a restore that started
+    // reading before the reset must not land on top of it afterwards.
+    tabs.forEach(function (st, tabId) {
+      st.gain = 1;
+      st.muted = false;
+      st.dirty = false;
+      st.epoch++;
+      broadcast(st);
+      updateBadge(tabId, st);
+    });
     editSites(function (sites) {
       Object.keys(sites).forEach(function (site) { delete sites[site]; });
     }).then(function () {
-      tabs.forEach(function (st, tabId) {
-        st.gain = 1;
-        st.muted = false;
-        broadcast(st);
-        updateBadge(tabId, st);
-      });
       sendResponse(snapshot(msg.tabId));
     });
     return true;
