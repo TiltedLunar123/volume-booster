@@ -51,3 +51,5 @@ OPEN SOURCE
 The full source is on GitHub, MIT licensed. It's the same plain JavaScript that ships in the package. No bundler, no minifier, so you can read exactly what runs.
 
 https://github.com/TiltedLunar123/volume-booster
+
+If it's useful to you and you feel like it, there's a tip jar linked in the footer of the popup. Everything works the same either way.

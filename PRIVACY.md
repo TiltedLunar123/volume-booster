@@ -27,6 +27,11 @@ no error reporting, and no remote configuration. The build fails if `fetch`,
 `XMLHttpRequest`, `WebSocket`, `eval`, or `importScripts` appear anywhere in the
 shipped code, so this is enforced rather than promised.
 
+The popup footer carries one ordinary link, to a tip page. Clicking it opens
+that site in a new tab exactly as a link on any page would, and nothing about
+you, your settings or your stored levels goes with it. Nothing is loaded from
+there unless you click it, so leaving it alone costs nothing.
+
 ## Permissions and why
 
 | Permission | Why |

@@ -26,6 +26,11 @@ The names still belong in the fields only a reviewer sees, where they are
 instructions rather than metadata: the test instructions below, and
 `reviewer-notes-1.0.2.txt`. Keep them there and out of the description.
 
+The same rule covers the tag list further down, which is public metadata by any
+reading and was carrying "youtube volume booster" and "twitch volume" until
+1.0.4. Those two are gone. Being rejected twice for the same thing in different
+fields is not a risk worth two keywords.
+
 ## Store listing
 
 | Field | Value |
@@ -153,6 +158,15 @@ websites.
 
 **Remote code:** no.
 
+**The tip link.** The popup footer links to https://buymeacoffee.com/judeh1l.
+Both stores allow a donation link; what they do not allow is one that nags,
+gates a feature, or looks like a purchase flow. This one is a single line of
+plain text at the same weight as the rest of the footer, it never appears
+twice, and nothing in the extension is withheld behind it. It is an `<a href>`,
+so nothing is loaded from that domain unless the user clicks it, and the
+extension still makes no requests of its own. That is why the data answers
+below are unchanged.
+
 **Data usage:** check **Web history** and nothing else.
 
 Google's User Data FAQ requires disclosure "even when data is processed or
@@ -220,7 +234,7 @@ the page loads.
 
 **Tags** (344 of the 500 character allowance)
 
-    volume booster,chrome extension,volume booster extension,increase volume chrome,boost volume browser,sound booster,volume amplifier,firefox addon,browser extension,volume control,audio boost,make video louder,quiet video fix,youtube volume booster,twitch volume,web audio api,open source extension,manifest v3,privacy extension,chrome web store
+    volume booster,chrome extension,volume booster extension,increase volume chrome,boost volume browser,sound booster,volume amplifier,firefox addon,browser extension,volume control,audio boost,make video louder,quiet video fix,louder video player,stream volume boost,web audio api,open source extension,manifest v3,privacy extension,chrome web store
 
 **Thumbnail:** `youtube-thumb-1280x720.png`, rendered by
 `tools/make-store-art.mjs` alongside the store images. 1280x720, 24-bit RGB,
