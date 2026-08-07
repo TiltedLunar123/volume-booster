@@ -50,6 +50,23 @@ var settled = false;
 var sendQueued = false;
 var pollTimer = 0;
 
+/* Counts the changes made in here, and how many of them the background has
+   confirmed. A poll may only repaint the level when those two agree and
+   nothing was changed here while it was in flight. Otherwise the reading is
+   either older than the user's last move, which would roll the slider back, or
+   it is a change made somewhere else, which is worth showing. */
+var writeSeq = 0;
+var ackedSeq = 0;
+
+function touch() {
+  userTouched = true;
+  writeSeq++;
+}
+
+function ack(seq) {
+  if (seq > ackedSeq) ackedSeq = seq;
+}
+
 /* -------------------------------------------------------------------- *
  * Slider mapping
  * -------------------------------------------------------------------- */
@@ -225,8 +242,10 @@ function queueSend() {
   sendQueued = true;
   setTimeout(function () {
     sendQueued = false;
+    var seq = writeSeq;
     send({ t: 'set', tabId: state.tabId, gain: state.gain, muted: state.muted })
       .then(function (snapshot) {
+        ack(seq);
         if (!snapshot) return;
         state.connected = !!snapshot.connected;
         state.agg = snapshot.agg || null;
@@ -249,7 +268,7 @@ function blocked(message) {
  * -------------------------------------------------------------------- */
 
 rangeEl.addEventListener('input', function () {
-  userTouched = true;
+  touch();
   var raw = parseInt(rangeEl.value, 10);
   if (Math.abs(raw - PIVOT) <= SNAP) {
     raw = PIVOT;
@@ -264,7 +283,7 @@ rangeEl.addEventListener('input', function () {
 presetsEl.addEventListener('click', function (event) {
   var button = event.target.closest('button[data-gain]');
   if (!button) return;
-  userTouched = true;
+  touch();
   state.gain = parseFloat(button.getAttribute('data-gain'));
   state.muted = false;
   render();
@@ -272,7 +291,7 @@ presetsEl.addEventListener('click', function (event) {
 });
 
 muteEl.addEventListener('click', function () {
-  userTouched = true;
+  touch();
   state.muted = !state.muted;
   render();
   queueSend();
@@ -285,11 +304,15 @@ rememberEl.addEventListener('change', function () {
 });
 
 resetAllEl.addEventListener('click', function () {
-  userTouched = true;
+  touch();
+  var seq = writeSeq;
   state.gain = 1;
   state.muted = false;
   render();
-  send({ t: 'resetAll', tabId: state.tabId }).then(adopt);
+  send({ t: 'resetAll', tabId: state.tabId }).then(function (snapshot) {
+    ack(seq);
+    adopt(snapshot);
+  });
 });
 
 /* -------------------------------------------------------------------- *
@@ -298,11 +321,13 @@ resetAllEl.addEventListener('click', function () {
 
 function poll() {
   pollTimer = setTimeout(function () {
+    var seen = writeSeq;
     send({ t: 'get', tabId: state.tabId }).then(function (snapshot) {
       if (snapshot) {
         state.connected = !!snapshot.connected;
         state.agg = snapshot.agg || null;
-        if (!userTouched && typeof snapshot.gain === 'number') {
+        if (writeSeq === seen && ackedSeq === writeSeq &&
+            typeof snapshot.gain === 'number') {
           state.gain = snapshot.gain;
           state.muted = !!snapshot.muted;
         }
