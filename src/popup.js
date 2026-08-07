@@ -280,6 +280,28 @@ rangeEl.addEventListener('input', function () {
   queueSend();
 });
 
+/* The track is a thousand steps wide so dragging stays smooth, which leaves the
+   browser's own arrow step at a quarter of a percent: a hundred presses to get
+   from 100% to 200%. Move by the 25% the keyboard shortcuts already use, and
+   leave modified arrows to whoever else wants them. */
+function arrowDirection(key) {
+  if (key === 'ArrowUp' || key === 'ArrowRight') return 1;
+  if (key === 'ArrowDown' || key === 'ArrowLeft') return -1;
+  return 0;
+}
+
+rangeEl.addEventListener('keydown', function (event) {
+  var direction = arrowDirection(event.key);
+  if (!direction) return;
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  event.preventDefault();
+  touch();
+  state.gain = Math.max(0, Math.min(MAX_GAIN, state.gain + direction * 0.25));
+  state.muted = false;
+  render();
+  queueSend();
+});
+
 presetsEl.addEventListener('click', function (event) {
   var button = event.target.closest('button[data-gain]');
   if (!button) return;

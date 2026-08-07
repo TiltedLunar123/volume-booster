@@ -908,6 +908,44 @@ function backgroundLike(snapshot) {
 }
 
 {
+  // The track is a thousand steps wide so dragging stays smooth, which leaves
+  // the browser's own arrow-key step at a quarter of a percent: a hundred
+  // presses to get from 100% to 200%. Anyone driving the popup from the
+  // keyboard is using the same control everyone else drags.
+  const bg = backgroundLike({
+    connected: true, gain: 1, muted: false, origin: 'https://a.example',
+    agg: { media: 1, boosted: 1, silenced: 0, protectedCount: 0, taintedCount: 0, suspended: false },
+    opts: { remember: true }
+  });
+  const popup = loadPopup({ handle: bg.handle });
+  await settle();
+  popup.flush();
+
+  let prevented = 0;
+  const press = (key) => popup.els.range.fire('keydown', {
+    key, preventDefault() { prevented++; }
+  });
+
+  press('ArrowUp');
+  popup.flush();
+  await settle();
+  is(popup.els.value.textContent, '125', 'an arrow key moves the level by a quarter');
+  is(prevented, 1, 'taking the key over from the browser');
+  is(bg.state.gain, 1.25, 'and the tab follows');
+
+  press('ArrowDown');
+  press('ArrowDown');
+  popup.flush();
+  await settle();
+  is(popup.els.value.textContent, '75', 'and it goes down as well as up');
+
+  // The shortcuts the browser owns are modified keys, so they stay the
+  // browser's to handle.
+  popup.els.range.fire('keydown', { key: 'ArrowUp', altKey: true, preventDefault() { prevented++; } });
+  is(prevented, 3, 'a modified arrow is left alone');
+}
+
+{
   // A page that was open before install. The boot path explains how to fix
   // it; the 800ms poll answering "still nothing" must not erase the advice.
   const snapshot = {
