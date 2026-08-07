@@ -419,7 +419,13 @@
     try {
       port.postMessage({ t: 'status', status: s });
     } catch (e) {
+      // The browser closed the channel before it got round to telling us. The
+      // disconnect that follows is for a port this frame has already let go
+      // of, so it returns early, and without this nothing would ever start the
+      // reconnect: the frame would sit there with the slider doing nothing.
       port = null;
+      lastStatusKey = '';
+      retryPort();
     }
   }
 

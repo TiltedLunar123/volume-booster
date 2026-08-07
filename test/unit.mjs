@@ -124,6 +124,7 @@ function loadContent(options = {}) {
   const intervals = [];
   const observers = [];
   const signal = { level: 0 };
+  const nav = { userActivation: { hasBeenActive: options.activated !== false } };
   let lastErrorReads = 0;
   let connectCalls = 0;
   let sourceCalls = 0;
@@ -225,12 +226,14 @@ function loadContent(options = {}) {
     }
   };
 
-  const win = {
+  // `options.frame` shares one window object across loads, which is what two
+  // copies of the content script landing in the same frame actually see.
+  const win = Object.assign(options.frame || {}, {
     AudioContext: FakeAudioContext,
     addEventListener(type, fn) {
       (windowEvents[type] = windowEvents[type] || []).push(fn);
     }
-  };
+  });
   win.top = win;
 
   const doc = {
@@ -249,15 +252,16 @@ function loadContent(options = {}) {
   }
 
   new Function(
-    'window', 'document', 'location', 'chrome',
-    'HTMLMediaElement', 'MutationObserver', 'setInterval', 'setTimeout',
+    'window', 'document', 'location', 'navigator', 'chrome',
+    'HTMLMediaElement', 'MutationObserver', 'setInterval', 'setTimeout', 'clearInterval',
     contentSource
   )(
     win, doc,
     { origin: 'https://example.com', href: 'https://example.com/watch' },
-    chrome, HTMLMediaElement, FakeMutationObserver,
+    nav, chrome, HTMLMediaElement, FakeMutationObserver,
     (fn) => { intervals.push(fn); return 99; },
-    (fn) => timers.push(fn)
+    (fn) => timers.push(fn),
+    () => { intervals.length = 0; }
   );
 
   return {
@@ -265,6 +269,8 @@ function loadContent(options = {}) {
     contexts,
     media,
     signal,
+    win,
+    nav,
     makeMedia,
     addMedia: (props) => { const el = makeMedia(props); mediaList.push(el); return el; },
     lastErrorReads: () => lastErrorReads,
@@ -422,6 +428,96 @@ describe('content.js orphaned context');
   vb.flush();
 
   is(gain.value, 1, 'an orphaned script unmutes on its way out');
+}
+
+{
+  // An orphaned copy is still sitting in the frame with its "I am running"
+  // flag set. The popup's inject fallback is the only way to attach a tab
+  // that was open when the extension updated, and a flag left standing is
+  // what makes that injection do nothing.
+  const frame = {};
+  const first = loadContent({ frame: frame });
+  is(first.ports.length, 1, 'the first copy in a frame starts');
+
+  const second = loadContent({ frame: frame });
+  is(second.ports.length, 0, 'a second copy alongside a live one refuses to start');
+
+  first.setRuntimeId(undefined);
+  first.ports[0].drop();
+  first.flush();
+
+  const third = loadContent({ frame: frame });
+  is(third.ports.length, 1, 'once the orphaned copy lets go, a fresh injection attaches');
+}
+
+/* ==================================================================== *
+ * Losing the port.
+ *
+ * A frame learns its port died two ways: the disconnect event, or a post
+ * that throws because the browser closed the channel first. Only the first
+ * of those leads anywhere on its own, and a frame that stops reconnecting
+ * is a page the slider silently does nothing on.
+ * ==================================================================== */
+
+describe('content.js losing the port');
+
+{
+  const vb = loadContent();
+  vb.ports[0].receive({ t: 'set', gain: 2, muted: false, limiter: true });
+  vb.flush();
+
+  vb.ports[0].postMessage = function () {
+    throw new Error('Attempting to use a disconnected port object');
+  };
+
+  // Something to report, so the send is not skipped as a duplicate.
+  vb.addMedia();
+  vb.sweep();
+  vb.flush();
+
+  // The disconnect the browser sends afterwards is for a port this frame has
+  // already let go of, so it cannot be what starts the reconnect.
+  vb.ports[0].drop();
+  vb.flush();
+
+  is(vb.ports.length, 2, 'a frame whose status post throws still reconnects');
+  is(vb.ports[1]?.sent[0]?.t, 'hello', 'and announces itself again');
+}
+
+/* ==================================================================== *
+ * A suspended context.
+ *
+ * Chrome starts an AudioContext suspended until the document has been
+ * interacted with, and a suspended context passes no audio at all: the
+ * element is routed into it and the page goes quiet. Waiting for a media
+ * event to try again leaves pages silent that are already playing.
+ * ==================================================================== */
+
+describe('content.js suspended context');
+
+{
+  const vb = loadContent();
+  vb.ports[0].receive({ t: 'set', gain: 2, muted: false, limiter: true });
+  const ctx = vb.contexts[0];
+
+  ctx.state = 'suspended';
+  const before = ctx.resumes;
+  vb.sweep();
+  ok(ctx.resumes > before, 'the sweep resumes a context the page has gone quiet under');
+  is(ctx.state, 'running', 'and the audio comes back without a media event');
+}
+
+{
+  // Before any interaction the browser refuses, and asking anyway only
+  // fills the page's console with the refusal.
+  const vb = loadContent({ activated: false });
+  vb.ports[0].receive({ t: 'set', gain: 2, muted: false, limiter: true });
+  const ctx = vb.contexts[0];
+
+  ctx.state = 'suspended';
+  const before = ctx.resumes;
+  vb.sweep();
+  is(ctx.resumes, before, 'but not before the document has been interacted with');
 }
 
 /* ==================================================================== *
@@ -834,6 +930,19 @@ function loadBackground(options = {}) {
   const injections = [];
   let lastErrorReads = 0;
 
+  const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+
+  /**
+   * Adds the round trip a real storage call has. `options.slow` names the keys
+   * that answer late, which is how a read that started earlier can still land
+   * after a write that started later.
+   */
+  function after(key, value) {
+    const slow = options.slow || [];
+    if (!slow.includes(key)) return Promise.resolve(value);
+    return new Promise((resolve) => setTimeout(() => resolve(value), 20));
+  }
+
   const api = {
     runtime: {
       id: 'test',
@@ -847,9 +956,15 @@ function loadBackground(options = {}) {
     },
     commands: { onCommand: { addListener: (fn) => { listeners.command = fn; } } },
     storage: {
+      // Real extension storage hands back a structured clone and answers on a
+      // round trip, so a reader holds a snapshot rather than the live object.
+      // Returning the live reference here hid every lost update the code could
+      // possibly have.
       local: {
-        get: (key) => Promise.resolve(key in store ? { [key]: store[key] } : {}),
-        set: (patch) => { Object.assign(store, patch); return Promise.resolve(); }
+        get: (key) => after(key, key in store ? { [key]: clone(store[key]) } : {}),
+        set: (patch) => after('set', null).then(() => {
+          Object.assign(store, clone(patch));
+        })
       }
     },
     action: {
@@ -874,11 +989,11 @@ function loadBackground(options = {}) {
    * frame is already set to, which is how a frame that outlived the background
    * reports a level nothing else remembers.
    */
-  function openFrame(tabId, origin, top = true, live = {}) {
+  function openFrame(tabId, origin, top = true, live = {}, frameId = top ? 0 : 1) {
     const sent = [];
     const port = {
       name: 'vb',
-      sender: { tab: { id: tabId }, frameId: top ? 0 : 1 },
+      sender: { tab: { id: tabId }, frameId: frameId },
       postMessage: (msg) => sent.push(msg),
       onDisconnect: { addListener: (fn) => { port.disconnect = fn; } },
       onMessage: { addListener: (fn) => { port.receive = fn; } }
