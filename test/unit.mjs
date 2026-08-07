@@ -1264,6 +1264,84 @@ describe('background.js origin integrity');
     'a parked change is saved when the same site reconnects');
 }
 
+{
+  // The browser hands over which frame this is. A document can be top level
+  // inside its own tree and still be nested in the tab, and taking its word
+  // for it moves the whole tab onto that document's origin.
+  const bg = loadBackground();
+  bg.openFrame(33, 'https://site.example');
+  await settle();
+  await bg.send({ t: 'set', tabId: 33, gain: 2, muted: false });
+  await settle();
+
+  bg.openFrame(33, 'https://nested.example', true, {}, 7);
+  await settle();
+
+  const after = await bg.send({ t: 'get', tabId: 33 });
+  is(after.origin, 'https://site.example',
+    'a nested frame claiming to be top does not take the tab over');
+  is(bg.store.sites['https://nested.example'], undefined,
+    'and never becomes a stored site');
+}
+
+/* ==================================================================== *
+ * Writing the site list.
+ *
+ * Every writer reads the whole list, changes one entry, and writes it all
+ * back. Two of those overlapping means the slower one puts back a picture
+ * of the list that was already out of date, and whatever landed in
+ * between is gone. The suite could not see this until the fake storage
+ * started handing out copies the way the real one does.
+ * ==================================================================== */
+
+describe('background.js concurrent writes');
+
+{
+  const bg = loadBackground({ slow: ['sites'] });
+  bg.store.sites = { 'https://old.example': { g: 3, m: false, t: 1 } };
+  bg.openFrame(30, 'https://new.example');
+  await settle();
+
+  // A level change starts reading the list, and the user clears everything
+  // before it gets as far as writing.
+  bg.send({ t: 'set', tabId: 30, gain: 2, muted: false });
+  await bg.send({ t: 'resetAll', tabId: 30 });
+  await new Promise((r) => setTimeout(r, 80));
+
+  is(bg.store.sites['https://old.example'], undefined,
+    'a save in flight does not put back a list Reset all had already cleared');
+}
+
+{
+  // The stored options are read once, when the worker starts. Until that
+  // read lands the defaults say remembering is on, which is the opposite of
+  // what a user who turned it off asked for.
+  const bg = loadBackground({ slow: ['opts'] });
+  bg.store.opts = { remember: false, limiter: true };
+
+  bg.openFrame(31, 'https://private.example');
+  await bg.send({ t: 'set', tabId: 31, gain: 2, muted: false });
+  await new Promise((r) => setTimeout(r, 80));
+
+  ok(!(bg.store.sites && bg.store.sites['https://private.example']),
+    'a level chosen before the stored options land is still kept off the disk');
+}
+
+{
+  // Reset all is a level change like any other, so a restore that started
+  // before it must not be allowed to land on top of it.
+  const bg = loadBackground({ slow: ['sites'] });
+  bg.store.sites = { 'https://loading.example': { g: 3, m: false, t: 1 } };
+
+  bg.openFrame(32, 'https://loading.example');
+  await bg.send({ t: 'resetAll', tabId: 32 });
+  await new Promise((r) => setTimeout(r, 80));
+
+  const after = await bg.send({ t: 'get', tabId: 32 });
+  is(after.gain, 1, 'a restore already in flight does not undo Reset all');
+  is(bg.badges[32], '', 'and the badge stays cleared');
+}
+
 /* ==================================================================== *
  * The restore window. Between the background waking and the saved level
  * being read back, the tab state briefly holds the default. Frames that
