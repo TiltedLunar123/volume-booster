@@ -226,9 +226,14 @@ api.runtime.onConnect.addListener(function (port) {
 
     if (msg.t !== 'hello') return;
     frame.status = msg.status || null;
-    frame.top = !!msg.top;
+    // The frame reports what it can see from inside itself, but the browser is
+    // the one that knows where the frame sits in the tab. A document can be
+    // top level within its own tree and still be nested in the page, and
+    // taking its word for it moves the whole tab onto that document's origin.
+    frame.top = !!msg.top &&
+      (typeof sender.frameId !== 'number' || sender.frameId === 0);
 
-    if (!msg.top) {
+    if (!frame.top) {
       // A subframe just needs whatever the tab is currently set to. Unless
       // nothing is known yet: before the top frame's hello, and while its
       // saved level is still being read back, the state holds a default that
