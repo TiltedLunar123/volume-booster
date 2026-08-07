@@ -982,6 +982,10 @@ function loadBackground(options = {}) {
     }
   };
 
+  // Seeded before the worker starts, because the worker reads its options on
+  // the first line it runs and anything set afterwards is already too late.
+  Object.assign(store, options.stored || {});
+
   new Function('browser', backgroundSource)(api);
 
   /**
@@ -1316,8 +1320,10 @@ describe('background.js concurrent writes');
   // The stored options are read once, when the worker starts. Until that
   // read lands the defaults say remembering is on, which is the opposite of
   // what a user who turned it off asked for.
-  const bg = loadBackground({ slow: ['opts'] });
-  bg.store.opts = { remember: false, limiter: true };
+  const bg = loadBackground({
+    slow: ['opts'],
+    stored: { opts: { remember: false, limiter: true } }
+  });
 
   bg.openFrame(31, 'https://private.example');
   await bg.send({ t: 'set', tabId: 31, gain: 2, muted: false });
