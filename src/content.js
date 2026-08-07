@@ -457,6 +457,11 @@
     muted = false;
     clearInterval(sweepTimer);
     apply();
+    // The claim on this frame goes with it. Nothing here can reach the
+    // extension again, and the popup's inject fallback, which is the only way
+    // to attach a tab that was open when the extension updated, checks this
+    // flag before it starts.
+    window.__volumeBoosterActive = false;
   }
 
   // The background being unloaded is routine, so every failed link has to lead
