@@ -793,6 +793,29 @@ function answering(snapshot) {
   };
 }
 
+/**
+ * A background that remembers what it was told, which is the only way to tell
+ * a reading from before the popup's last change apart from a change made
+ * somewhere else. `state` is writable, standing in for a keyboard shortcut or
+ * a navigation moving the tab while the popup sits open.
+ */
+function backgroundLike(snapshot) {
+  const state = Object.assign({}, snapshot);
+  return {
+    state,
+    handle(msg) {
+      if (msg.t === 'set') {
+        if (typeof msg.gain === 'number') state.gain = msg.gain;
+        if (typeof msg.muted === 'boolean') state.muted = msg.muted;
+      }
+      if (msg.t === 'inject') {
+        return state.connected ? { ok: true, state: Object.assign({}, state) } : { ok: false };
+      }
+      return Object.assign({}, state);
+    }
+  };
+}
+
 {
   const snapshot = {
     connected: true, gain: 3, muted: false, origin: 'https://a.example',
@@ -856,6 +879,32 @@ function answering(snapshot) {
 
   popup.els.mute.fire('click');
   is(popup.els.cross.style.display, 'none', 'unmuting flips both back');
+}
+
+{
+  // A keyboard shortcut, or a redirect landing the tab on a different site,
+  // changes the level while the popup sits open. Refusing every later reading
+  // once the user has touched anything leaves the popup showing a level the
+  // tab is no longer at, for as long as it stays open.
+  const bg = backgroundLike({
+    connected: true, gain: 2, muted: false, origin: 'https://a.example',
+    agg: { media: 1, boosted: 1, silenced: 0, protectedCount: 0, taintedCount: 0, suspended: false },
+    opts: { remember: true }
+  });
+  const popup = loadPopup({ handle: bg.handle });
+  await settle();
+  popup.flush();
+
+  popup.els.presets.fire('click', { target: popup.presetButtons[3] });
+  popup.flush();
+  await settle();
+  is(popup.els.value.textContent, '300', 'a preset is painted and sent');
+  is(bg.state.gain, 3, 'and the background has it');
+
+  bg.state.gain = 4;
+  popup.flush();
+  await settle();
+  is(popup.els.value.textContent, '400', 'a change made outside the popup reaches it');
 }
 
 {
