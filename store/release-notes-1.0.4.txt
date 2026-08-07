@@ -1,0 +1,17 @@
+The slider no longer goes dead on a page. If the browser closed the extension's link to a tab at the wrong moment, that tab stopped listening for good and the only way back was reloading it. It reconnects on its own now.
+
+Pages that went quiet come back. A boosted page could fall silent if the browser had not yet let the extension make sound there, and it stayed silent until you pressed play again. It now recovers by itself as soon as you have clicked anything on the page.
+
+Updates hand your open tabs back properly. After an update, tabs that were already open could not be reattached from the popup at all, so a reload was the only option.
+
+Reset all resets. It now clears every tab the moment you press it, and a level that was still being loaded in the background can no longer come back afterwards and undo it.
+
+Remember levels is respected from the first second. Just after the browser woke the extension up, a level could still be written to disk by someone who had turned remembering off.
+
+The popup keeps up with the rest of the extension. Once you had moved the slider, it stopped noticing changes made anywhere else, so a keyboard shortcut or a page redirecting itself left the popup showing a level the tab was no longer at.
+
+Arrow keys work properly on the slider. They used to move it a quarter of a percent per press, which meant about a hundred presses to double the volume. They now move 25% like the keyboard shortcuts do.
+
+There is a tip link in the footer of the popup, next to Reset all. It is one line of ordinary text, everything in the extension works the same whether or not you use it, and nothing is loaded from that site unless you click it.
+
+No new permissions.
